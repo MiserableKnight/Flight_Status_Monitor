@@ -28,6 +28,15 @@ def load_config():
 try:
     cfg = load_config()
     USER_DATA_PATH = cfg['user_data_path']
+
+    # 读取飞机号列表
+    if 'aircraft' in cfg and 'aircraft_list' in cfg['aircraft']:
+        aircraft_list_str = cfg['aircraft']['aircraft_list']
+        AIRCRAFT_LIST = [x.strip() for x in aircraft_list_str.split(',')]
+        print(f"✅ 读取到 {len(AIRCRAFT_LIST)} 架飞机: {', '.join(AIRCRAFT_LIST)}")
+    else:
+        print("⚠️ 配置文件中未找到飞机号列表，使用默认值")
+        AIRCRAFT_LIST = ["B-652G", "B-656E"]
 except Exception as e:
     print(f"❌ 初始化失败: {e}")
     exit(1)
@@ -294,8 +303,7 @@ def main(target_date=None):
 
     # ========== 步骤3: 选择飞机 ==========
     print("\n🎯 步骤3: 选择飞机")
-    aircraft_list = ["B-652G", "B-656E"]
-    if not select_aircrafts(page, aircraft_list):
+    if not select_aircrafts(page, AIRCRAFT_LIST):
         return
 
     # ========== 步骤4: 设置时间范围 ==========

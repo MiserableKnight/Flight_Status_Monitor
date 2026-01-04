@@ -38,14 +38,24 @@ if "%MISSING_DATE%"=="" (
 
     echo.
     echo Updating main data file...
-    python flight_data_update.py >nul 2>&1
+    python flight_data_update.py
+    set UPDATE_RESULT=%errorlevel%
 
-    echo.
-    echo ========================================
-    echo   Task completed!
-    echo ========================================
-    pause
-    exit /b 0
+    if "%UPDATE_RESULT%"=="0" (
+        echo.
+        echo ========================================
+        echo   Task completed successfully!
+        echo ========================================
+        pause
+        exit /b 0
+    ) else (
+        echo.
+        echo ========================================
+        echo   Task completed with warnings
+        echo ========================================
+        pause
+        exit /b 0
+    )
 )
 
 REM Data Fill Mode - Missing data detected

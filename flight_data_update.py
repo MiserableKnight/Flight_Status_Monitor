@@ -103,7 +103,7 @@ def update_flight_data(target_date=None):
     df_main = pd.read_csv(main_file)
 
     # 获取最后一行的日期
-    last_date_str = df_main.iloc[-1]['date']
+    last_date_str = str(df_main.iloc[-1]['date'])
     last_date = datetime.strptime(last_date_str, "%Y/%m/%d")
 
     print(f"📅 主数据文件最后一行日期：{last_date.strftime('%Y-%m-%d')}")
@@ -266,7 +266,7 @@ def get_first_missing_date():
         return None
 
     df_main = pd.read_csv(main_file)
-    last_date_str = df_main.iloc[-1]['date']
+    last_date_str = str(df_main.iloc[-1]['date'])
     last_date = datetime.strptime(last_date_str, "%Y/%m/%d")
     today = datetime.now().date()
 

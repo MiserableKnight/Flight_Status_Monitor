@@ -10,3 +10,7 @@ user_data_path = D:\Code\flight_data_daily_get\chrome_debug
 [target]
 # 目标系统网址
 url = https://cis.comac.cc:8004/caphm/mainController/index.html
+
+[aircraft]
+# 要监控的飞机号列表（用逗号分隔）
+aircraft_list = B-652G, B-656E

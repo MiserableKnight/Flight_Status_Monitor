@@ -1,0 +1,12 @@
+[credentials]
+# 请在这里填入您的登录凭证
+username = YOUR_USERNAME_HERE
+password = YOUR_PASSWORD_HERE
+
+[paths]
+# 浏览器用户数据目录路径(建议使用绝对路径)
+user_data_path = D:\Code\flight_data_daily_get\chrome_debug
+
+[target]
+# 目标系统网址
+url = https://cis.comac.cc:8004/caphm/mainController/index.html

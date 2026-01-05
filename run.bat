@@ -110,14 +110,20 @@ if errorlevel 1 (
 )
 
 echo [%CURRENT_MISSING%] Updating main data file...
-python flight_data_update.py >nul 2>&1
+python flight_data_update.py
+set UPDATE_RESULT=%errorlevel%
 
 REM Check if current date's data was added successfully
 REM Exit code 1 means "still missing other dates", but current date was added
 REM Exit code 0 means "all dates filled"
 REM Both cases are OK for continuing the loop
 
-echo [%CURRENT_MISSING%] Successfully added
+echo [%CURRENT_MISSING%] Update result: %UPDATE_RESULT%
+if "%UPDATE_RESULT%"=="0" (
+    echo [%CURRENT_MISSING%] Successfully added
+) else (
+    echo [%CURRENT_MISSING%] Added with warnings
+)
 
 REM Continue with next missing date
 goto fill_loop

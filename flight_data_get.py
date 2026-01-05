@@ -30,8 +30,11 @@ try:
     USER_DATA_PATH = cfg['user_data_path']
 
     # 读取飞机号列表
-    if 'aircraft' in cfg and 'aircraft_list' in cfg['aircraft']:
-        aircraft_list_str = cfg['aircraft']['aircraft_list']
+    config = configparser.ConfigParser()
+    config.read(CONFIG_FILE, encoding='utf-8')
+
+    if config.has_section('aircraft') and config.has_option('aircraft', 'aircraft_list'):
+        aircraft_list_str = config.get('aircraft', 'aircraft_list')
         AIRCRAFT_LIST = [x.strip() for x in aircraft_list_str.split(',')]
         print(f"✅ 读取到 {len(AIRCRAFT_LIST)} 架飞机: {', '.join(AIRCRAFT_LIST)}")
     else:

@@ -175,13 +175,15 @@ def update_flight_data(target_date=None):
         cumulative_fc = last_cumulative['fc'] + fc
         cumulative_flight_leg = last_cumulative['flight_leg'] + flight_leg
 
-        # 计算天数（从2025-04-19到当前日期的天数 - 46）
-        days_since_start = calculate_days_since_start(date) - 46
+        # 计算天数（两架飞机分别从2025-04-19到当前日期的实际运行天数；185要减去46天，196要减去60天）
+        days_since_start_185 = calculate_days_since_start(date) - 46
+        days_since_start_196 = calculate_days_since_start(date) - 60
+        total_days = days_since_start_185 + days_since_start_196
 
         # 计算累计日利用率
-        if days_since_start > 0:
-            cumulative_daily_util_air_time = (cumulative_air_time / days_since_start) / 2
-            cumulative_daily_util_block_time = (cumulative_block_time / days_since_start) / 2
+        if total_days > 0:
+            cumulative_daily_util_air_time = cumulative_air_time / total_days
+            cumulative_daily_util_block_time = cumulative_block_time / total_days
         else:
             cumulative_daily_util_air_time = daily_util_air_time
             cumulative_daily_util_block_time = daily_util_block_time

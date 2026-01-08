@@ -464,15 +464,106 @@ def main(target_date=None):
         log(f"Browser connection failed: {e}", "ERROR")
         return
 
-    # 检查当前页面
+    # ========== 智能登录系统 ==========
+    print("\n🔍 检查当前页面状态...")
     current_url = page.url
-    print(f"📍 当前页面: {current_url}")
+    print(f"📍 当前URL: {current_url}")
 
-    # 如果不在首页，先跳转到首页
-    if "mainController/index.html" not in current_url:
-        print("⚠️ 不在首页，尝试跳转...")
+    # 如果在新标签页，导航到登录页
+    if "chrome://" in current_url or current_url == "about:blank" or "newtab" in current_url:
+        print("🌐 检测到空白页，导航到登录页面...")
+        page.get("https://cis2.comac.cc:8040/portal/")
+        time.sleep(2)
+        current_url = page.url
+
+    # 如果不是空白页也不是登录页，直接跳转到首页
+    is_blank_page = "chrome://" in current_url or current_url == "about:blank" or "newtab" in current_url
+    is_login_page = ("portal" in current_url and "login" in current_url) or "rbacUsersController/login.html" in current_url
+
+    if not is_blank_page and not is_login_page:
+        print("🚀 不在登录流程中，直接跳转到系统首页...")
         page.get("https://cis.comac.cc:8004/caphm/mainController/index.html")
-        time.sleep(3)
+        time.sleep(2)
+        current_url = page.url
+
+    # 智能等待：监控所有可能的页面状态
+    print("\n⏳ 智能监控页面跳转...")
+    max_wait = 60
+    found_target = False
+    login_executed = False
+
+    for i in range(max_wait):
+        # 实时检测URL变化
+        current_url = page.url
+
+        # 情况1: 已在目标首页
+        if "mainController/index.html" in current_url:
+            print(f"   ✅ 已在首页！")
+            found_target = True
+            break
+
+        # 情况2: 在portal登录页 - 需要填充账号密码
+        elif "portal" in current_url and "login" in current_url:
+            if not login_executed and page.ele('#loginPwd'):
+                print(f"   🔒 检测到portal登录页，开始登录...")
+                try:
+                    # 填账号
+                    user_ele = page.ele('tag:input@@placeholder=请输入账号')
+                    if not user_ele:
+                        user_ele = page.ele('tag:input@@type=text')
+
+                    if user_ele:
+                        user_ele.clear()
+                        user_ele.input(cfg.get('username', ''))
+                        try:
+                            page.ele('text:FLYWIN').click(by_js=True)
+                        except:
+                            pass
+
+                    # 填密码并提交
+                    pwd_ele = page.ele('#loginPwd')
+                    if pwd_ele:
+                        pwd_ele.clear()
+                        pwd_ele.input(cfg.get('password', ''))
+                        print(f"   ⚡ 提交登录...")
+                        pwd_ele.input('\n')
+                        login_executed = True
+
+                except Exception as e:
+                    print(f"   ❌ 登录出错: {e}")
+
+        # 情况3: 在rbacUsersController中间页 - 需要点击WEB
+        elif "rbacUsersController/login.html" in current_url:
+            web_btn = page.ele('text:WEB')
+            if web_btn and web_btn.states.is_displayed:
+                print(f"   👀 检测到中间页，点击 'WEB' 按钮...")
+                web_btn.click(by_js=True)
+
+        # 情况4: 已在系统内其他页面
+        elif "cis.comac.cc:8004" in current_url:
+            print(f"   ✅ 已在系统内")
+            found_target = True
+            break
+
+        # 每5秒打印一次进度（减少输出）
+        if i % 10 == 0 and i > 0:
+            print(f"   ⏳ 等待中... {i//2}秒", end="\r")
+
+        # 快速检测，0.5秒间隔
+        time.sleep(0.5)
+
+    print()  # 换行
+
+    # 最终验证
+    if found_target or "mainController/index.html" in page.url:
+        print(f"🎉 准备完成！当前页面: {page.title}")
+        log("系统就绪", "SUCCESS")
+    else:
+        print(f"❌ 超时或异常，当前页面: {page.url}")
+        log("页面状态异常", "ERROR")
+        return
+
+    time.sleep(0.5)
 
     # ========== 步骤1: 点击"综合监控" ==========
     print("\n🎯 步骤1: 点击【综合监控】")

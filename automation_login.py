@@ -46,16 +46,31 @@ def main():
         print(f"❌ 启动失败: {e}")
         return
 
-    # --- 1. 初始跳转 ---
-    # 这里加个判断，防止已经在中间页或者首页了还跳回登录页
+    # --- 1. 智能状态检测与导航 ---
+    from navigator import ensure_page_state, PageState, navigate_to_target
+
     current_url = page.url
-    if "index.html" not in current_url and "rbacUsersController" not in current_url and "login" not in current_url:
-        print(f"🔗 跳转至登录页: {TARGET_URL}")
-        page.get(TARGET_URL)
-    elif "index.html" in current_url:
+    print(f"🔍 当前页面: {current_url}")
+
+    # 检测页面状态
+    state = ensure_page_state(page)
+
+    if state == PageState.ALREADY_TARGET:
+        # 已在首页，刷新即可
         print("✅ 检测到已在首页，直接刷新...")
         page.refresh()
-    
+    elif state == PageState.IN_SYSTEM:
+        # 在系统内但非首页
+        print("📍 检测到在系统内，准备导航至首页...")
+        navigate_to_target(page, state)
+    elif state == PageState.OUT_SYSTEM:
+        # 在系统外
+        print("🌐 检测到在系统外，准备进入系统...")
+        navigate_to_target(page, state)
+    elif state == PageState.NEED_LOGIN:
+        # 在登录页
+        print("🔒 检测到在登录页，准备登录...")
+
     time.sleep(2)
 
     # --- 2. 登录处理 (如果还在登录页) ---

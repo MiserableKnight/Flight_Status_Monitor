@@ -1,0 +1,26 @@
+# 邮件配置文件
+# 用于越捷票价监控系统的邮件发送功能
+
+# 邮件服务器配置
+email:
+  # SMTP服务器地址
+  smtp_server: "smtp.gmail.com"
+
+  # SMTP端口
+  smtp_port: 587
+
+  # SMTP用户名 (你的邮箱地址)
+  smtp_user: "zhengqiao1208@gmail.com"
+
+  # SMTP密码 (对于Gmail需要应用专用密码，不是登录密码)
+  smtp_password: "ffnivrparuufhvxj"
+
+  # 发件人显示名称
+  sender_name: "越捷航班监控系统"
+
+  # 收件人邮箱地址 (多个收件人用逗号分隔)
+  receiver_email: "970937197@qq.com"
+
+  # 安全连接设置
+  use_ssl: false  # SSL连接 (端口465)
+  use_tls: true   # TLS连接 (端口587)

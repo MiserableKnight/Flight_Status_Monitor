@@ -15,6 +15,7 @@ import time
 import csv
 import configparser
 import os
+import shutil
 from datetime import datetime
 from abc import ABC, abstractmethod
 import sys
@@ -194,8 +195,8 @@ class BaseFetcher(ABC):
                     print(f"   👀 检测到中间页,点击 'WEB' 按钮...")
                     web_btn.click(by_js=True)
 
-            # 情况4: 已在系统内其他页面
-            elif "cis.comac.cc:8004" in current_url:
+            # 情况4: 已在系统内其他页面（支持8004和8010端口）
+            elif ("cis.comac.cc:8004" in current_url or "cis.comac.cc:8010" in current_url):
                 print(f"   ✅ 已在系统内")
                 found_target = True
                 break
@@ -219,13 +220,13 @@ class BaseFetcher(ABC):
             self.log("页面状态异常", "ERROR")
             return False
 
-    def save_to_csv(self, data, filename=None, subdir='data'):
+    def save_to_csv(self, data, filename=None, subdir='data/daily_raw'):
         """
-        保存数据到CSV文件
+        保存数据到CSV文件(覆盖模式)
 
         :param data: 要保存的数据(二维列表)
         :param filename: 文件名,不指定则自动生成
-        :param subdir: 子目录名,默认为 'data'
+        :param subdir: 子目录名,默认为 'data/daily_raw'
         :return: 保存成功返回文件路径,失败返回 None
         """
         if not data:
@@ -245,7 +246,23 @@ class BaseFetcher(ABC):
 
         filepath = os.path.join(data_dir, filename)
 
+        # 如果文件已存在,先备份
+        if os.path.exists(filepath):
+            backup_dir = os.path.join(project_root, 'data', 'backup')
+            if not os.path.exists(backup_dir):
+                os.makedirs(backup_dir)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            name, ext = os.path.splitext(filename)
+            backup_filename = f"{name}_{timestamp}{ext}"
+            backup_path = os.path.join(backup_dir, backup_filename)
+            try:
+                shutil.copy2(filepath, backup_path)
+                print(f"   💾 已备份旧文件: {backup_path}")
+            except Exception as e:
+                print(f"   ⚠️ 备份失败: {e}")
+
         try:
+            # 使用 'w' 模式覆盖写入
             with open(filepath, 'w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f)
                 writer.writerows(data)

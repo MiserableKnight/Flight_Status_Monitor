@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(ls:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(dir:*)",
+      "Bash(python:*)",
+      "Bash(\"venv\\\\Scripts\\\\python.exe\":*)",
+      "Bash(\"venv\\\\Scripts\\\\python.exe\" modulesleg_fetcher.py 2026-01-09)",
+      "Bash(\"venv\\\\Scripts\\\\python.exe\" modules/leg_fetcher.py 2026-01-09)",
+      "Bash(\"venv\\\\Scripts\\\\python.exe\" leg_status_monitor.py 2026-01-09)"
     ]
   }
 }

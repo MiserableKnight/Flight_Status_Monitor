@@ -140,6 +140,66 @@ class TaskScheduler:
 
             return False
 
+    def run_update_script(self, script_name: str, task_name: str, date_arg: str = None) -> bool:
+        """
+        运行数据更新/监控脚本
+
+        Args:
+            script_name: 脚本文件名 (如 'leg_data_update')
+            task_name: 任务名称（用于日志）
+            date_arg: 可选的日期参数
+
+        Returns:
+            bool: 是否成功
+        """
+        print(f"\n{'='*60}")
+        print(f"🔄 开始执行任务: {task_name}")
+        if date_arg:
+            print(f"📅 日期: {date_arg}")
+        print(f"⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print('='*60)
+
+        self.log(f"开始执行任务: {task_name}")
+
+        try:
+            script_path = os.path.join(project_root, f"{script_name}.py")
+
+            if not os.path.exists(script_path):
+                raise Exception(f"脚本不存在: {script_path}")
+
+            # 构建命令参数
+            cmd = [sys.executable, script_path]
+            if date_arg:
+                cmd.append(date_arg)
+
+            # 运行脚本
+            result = subprocess.run(
+                cmd,
+                capture_output=False,  # 实时输出
+                text=True,
+                timeout=120  # 2分钟超时
+            )
+
+            if result.returncode == 0:
+                print(f"✅ 任务 {task_name} 执行成功")
+                self.log(f"任务成功: {task_name}", "SUCCESS")
+                return True
+            else:
+                print(f"❌ 任务 {task_name} 执行失败")
+                self.log(f"任务失败: {task_name}", "ERROR")
+                return False
+
+        except subprocess.TimeoutExpired:
+            error_msg = f"任务执行超时（120秒）"
+            print(f"❌ {error_msg}")
+            self.log(f"任务超时: {task_name}", "ERROR")
+            return False
+
+        except Exception as e:
+            print(f"❌ 任务执行出错: {e}")
+            self.log(f"任务出错: {task_name} - {e}", "ERROR")
+            return False
+
     def fetch_leg_data(self):
         """抓取航段数据"""
         return self.run_script('leg_fetcher', '航段数据抓取')
@@ -298,11 +358,45 @@ class TaskScheduler:
 
         self.notifier.send_summary_report(report_data)
 
+    def fetch_and_update_leg_data(self, target_date=None):
+        """
+        抓取并更新航段数据（完整流程）
+        1. Fetch leg data
+        2. Update leg data（仅在状态变化时）
+        3. 自动触发邮件通知
+
+        Args:
+            target_date: 可选的目标日期
+
+        Returns:
+            bool: 整体是否成功
+        """
+        # 步骤1: 抓取数据
+        fetch_success = self.fetch_leg_data()
+        if not fetch_success:
+            print("❌ 数据抓取失败，跳过更新")
+            return False
+
+        # 步骤2: 更新数据（会自动检测状态变化和发送邮件）
+        if target_date is None:
+            target_date = datetime.now().strftime('%Y-%m-%d')
+
+        update_success = self.run_update_script(
+            'leg_data_update',
+            '航段数据更新',
+            target_date
+        )
+
+        return update_success
+
     def run_interactive(self):
         """交互式运行（用于测试）"""
         print("\n🎯 交互式模式")
         print("="*60)
-        print("1. 抓取航段数据（Leg Data）")
+        print("1. 抓取并更新航段数据（Fetch & Update Leg Data）")
+        print("   - 抓取最新数据")
+        print("   - 检测状态变化并更新")
+        print("   - 自动发送邮件通知")
         print("2. 抓取故障数据（Faults Data）")
         print("3. 抓取飞行数据（Flight Data - 运力统计）")
         print("4. 退出")
@@ -312,11 +406,15 @@ class TaskScheduler:
             choice = input("\n请选择操作 (1-4): ").strip()
 
             if choice == '1':
+                print("\n📋 执行航段数据完整流程...")
                 self.stats['leg_fetch_count'] = self.stats.get('leg_fetch_count', 0) + 1
-                if self.fetch_leg_data():
+
+                if self.fetch_and_update_leg_data():
                     self.stats['leg_success_count'] = self.stats.get('leg_success_count', 0) + 1
+                    print("\n✅ 航段数据流程执行完成")
                 else:
                     self.stats['leg_failure_count'] = self.stats.get('leg_failure_count', 0) + 1
+                    print("\n⚠️ 航段数据流程执行失败")
 
             elif choice == '2':
                 self.stats['faults_fetch_count'] += 1

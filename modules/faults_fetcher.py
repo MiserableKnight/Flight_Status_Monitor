@@ -97,20 +97,19 @@ class FaultsFetcher(BaseFetcher):
         # 等待下拉选项出现
         time.sleep(2)
 
-        # 先取消所有已选择的飞机选项(只取消包含飞机号的选项)
-        print("   🔍 检查并清除已选项...")
+        # 先取消所有已选择的飞机选项(清空所有选项)
+        print("   🔍 清空所有已选项...")
         text_elements = page.eles('tag:span@@class=text')
         for ele in text_elements:
             parent = ele.parent()
             if parent:
                 parent_attr = parent.attr('class') or ''
                 if 'selected' in parent_attr or 'active' in parent_attr:
-                    # 只取消包含飞机号(B-开头)或完整航班的选项
+                    # 取消所有选中的选项
                     text = ele.text.strip()
-                    if text.startswith('B-') or text.startswith('C909-'):
-                        print(f"   🔄 取消选择: {text}")
-                        parent.click(by_js=True)
-                        time.sleep(0.3)
+                    print(f"   🔄 取消选择: {text}")
+                    parent.click(by_js=True)
+                    time.sleep(0.3)
 
         time.sleep(1)
 

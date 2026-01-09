@@ -93,20 +93,19 @@ class LegFetcher(BaseFetcher):
         # 等待下拉选项出现
         time.sleep(2)
 
-        # 先取消所有已选择的飞机选项(只取消包含飞机号的选项)
-        print("   🔍 检查并清除已选项...")
+        # 先取消所有已选择的飞机选项(清空所有选项)
+        print("   🔍 清空所有已选项...")
         text_elements = page.eles('tag:span@@class=text')
         for ele in text_elements:
             parent = ele.parent()
             if parent:
                 parent_attr = parent.attr('class') or ''
                 if 'selected' in parent_attr or 'active' in parent_attr:
-                    # 只取消包含飞机号(B-开头)的选项
+                    # 取消所有选中的选项
                     text = ele.text.strip()
-                    if text.startswith('B-'):
-                        print(f"   🔄 取消选择: {text}")
-                        parent.click(by_js=True)
-                        time.sleep(0.3)
+                    print(f"   🔄 取消选择: {text}")
+                    parent.click(by_js=True)
+                    time.sleep(0.3)
 
         time.sleep(1)
 
@@ -189,27 +188,41 @@ class LegFetcher(BaseFetcher):
                     # 获取所有列 div
                     cells = row.eles('tag:div')
 
-                    # 提取数据(跳过前几个div,它们是复选框等)
+                    # 提取数据 - 精确定位数据单元格
+                    # HTML结构分析：
+                    # 1. 第1个div是复选框（width:30px）- 需要跳过
+                    # 2. 然后是15个数据div，每个数据div后都有一个<span></span>
+                    # 3. 数据div有 class="longtext" 或 class="showOptSpan"
                     row_data = []
-                    # 从第2个div开始(索引1),每4个div中取第3个(包含文本的)
-                    # 实际结构:checkbox div -> 文本div -> span -> ...
 
-                    # 更简单的方法:直接获取所有有文本的 div
+                    # 方法：找到所有带 class="longtext" 或 class="showOptSpan" 的 div
                     for cell in cells:
+                        # 检查 class 属性
+                        class_attr = cell.attr('class') or ''
+
+                        # 只保留有 longtext 或 showOptSpan 类的元素
+                        if 'longtext' not in class_attr and 'showOptSpan' not in class_attr:
+                            continue
+
+                        # 提取文本
                         text = cell.text.strip()
-                        if text and text not in ['', '\n', '\t']:
-                            # 过滤掉复选框等非数据元素
-                            # 数据div通常有特定的宽度样式
-                            style = cell.attr('style') or ''
-                            if 'width' in style or 'text-align' in style:
-                                row_data.append(text)
+
+                        # 处理空值 - 保留位置
+                        if text in ['&nbsp;', '\xa0', '']:
+                            row_data.append('')
+                        else:
+                            # 去掉末尾的 &nbsp;
+                            if text.endswith('&nbsp;'):
+                                text = text[:-6].strip()
+                            row_data.append(text)
+
+                    # 确保始终有15列（防御性检查）
+                    if len(row_data) < 15:
+                        row_data.extend([''] * (15 - len(row_data)))
 
                     # 只取前15列
-                    if len(row_data) >= 15:
-                        data_rows.append(row_data[:15])
-                        print(f"   📝 第{i+1}行: {row_data[0]} - {row_data[1]} - {row_data[3]}")
-                    else:
-                        print(f"   ⚠️ 第{i+1}行数据不完整: {len(row_data)}列")
+                    data_rows.append(row_data[:15])
+                    print(f"   📝 第{i+1}行: {row_data[0]} - {row_data[1]} - {row_data[2]} (OUT:{row_data[6]}, OFF:{row_data[7]}, ON:{row_data[8]}, IN:{row_data[9]})")
 
                 except Exception as e:
                     print(f"   ⚠️ 提取第{i+1}行失败: {e}")
@@ -263,11 +276,13 @@ class LegFetcher(BaseFetcher):
         # ========== 步骤3: 设置时间范围 ==========
         print("\n🎯 步骤3: 设置时间范围")
 
-        # 设置开始时间
+        # 设置开始时间 - readonly输入框需要用JavaScript设置值
         start_input = page.ele('tag:input@@id=startTime')
         if start_input:
-            start_input.clear()
-            start_input.input(target_date)
+            # 使用元素对象直接运行JavaScript设置值
+            start_input.run_js('this.value = arguments[0]', target_date)
+            # 触发change事件以确保系统识别
+            start_input.run_js('this.dispatchEvent(new Event("change", {bubbles: true}))')
             print(f"   ✅ 开始时间设置为: {target_date}")
             time.sleep(0.5)
         else:
@@ -276,8 +291,10 @@ class LegFetcher(BaseFetcher):
         # 设置结束时间
         end_input = page.ele('tag:input@@id=endTime')
         if end_input:
-            end_input.clear()
-            end_input.input(target_date)
+            # 使用元素对象直接运行JavaScript设置值
+            end_input.run_js('this.value = arguments[0]', target_date)
+            # 触发change事件
+            end_input.run_js('this.dispatchEvent(new Event("change", {bubbles: true}))')
             print(f"   ✅ 结束时间设置为: {target_date}")
             time.sleep(0.5)
         else:

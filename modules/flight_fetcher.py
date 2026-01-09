@@ -44,18 +44,32 @@ class FlightFetcher(BaseFetcher):
         # 等待下拉选项出现
         time.sleep(2)
 
-        # 先取消所有已选择的选项(防止多选)
-        print("   🔍 检查并清除已选项...")
-        text_elements = page.eles('tag:span@@class=text')
-        for ele in text_elements:
-            # 检查父元素是否包含 selected 或 active 类
-            parent = ele.parent()
-            if parent:
-                parent_attr = parent.attr('class') or ''
-                if 'selected' in parent_attr or 'active' in parent_attr:
-                    print(f"   🔄 取消选择: {ele.text}")
-                    parent.click(by_js=True)
+        # 先取消所有已选择的选项(清空所有选项)
+        print("   🔍 清空所有已选项...")
+
+        # 方法：查找所有 role="option" 的元素
+        option_elements = page.eles('tag:a@role=option')
+
+        # 调试：打印找到的选项数量
+        print(f"   📊 找到 {len(option_elements)} 个选项")
+
+        cleared_count = 0
+        for ele in option_elements:
+            # 检查是否有选中标记（glyphicon-ok check-mark）
+            # 或者检查 aria-selected 是否为 true
+            check_mark = ele.ele('tag:span@@class=glyphicon glyphicon-ok check-mark')
+
+            if check_mark:
+                # 这个选项被选中了，需要取消
+                text_ele = ele.ele('tag:span@@class=text')
+                if text_ele:
+                    text = text_ele.text.strip()
+                    print(f"   🔄 取消选择: {text}")
+                    ele.click(by_js=True)
                     time.sleep(0.3)
+                    cleared_count += 1
+
+        print(f"   ✅ 共清除了 {cleared_count} 个已选项")
 
         time.sleep(1)
 
@@ -66,38 +80,99 @@ class FlightFetcher(BaseFetcher):
         }
 
         print("   🎯 开始选择目标飞机...")
+        selected_count = 0
         for aircraft in aircraft_list:
             target_text = aircraft_mapping.get(aircraft, aircraft)
 
-            # 重新获取元素列表(因为DOM可能已更新)
-            text_elements = page.eles('tag:span@@class=text')
+            # 重新获取选项列表(因为DOM可能已更新)
+            option_elements = page.eles('tag:a@role=option')
             found = False
-            for ele in text_elements:
-                if ele.text.strip() == target_text:
-                    print(f"   ✅ 选择飞机: {ele.text}")
+            for ele in option_elements:
+                text_ele = ele.ele('tag:span@@class=text')
+                if text_ele and text_ele.text.strip() == target_text:
+                    print(f"   ✅ 选择飞机: {text_ele.text}")
                     try:
-                        # 尝试点击父元素(通常是可点击的选项)
-                        parent = ele.parent()
-                        if parent:
-                            parent.click(by_js=True)
-                        else:
-                            ele.click(by_js=True)
+                        ele.click(by_js=True)
                     except Exception as e:
                         print(f"   ⚠️ 点击失败: {e}")
                     time.sleep(0.5)
                     found = True
+                    selected_count += 1
                     break
 
             if not found:
                 print(f"   ❌ 未找到飞机: {aircraft} ({target_text})")
 
-        # 点击其他地方关闭下拉框
-        try:
-            page.ele('tag:body').click()
-        except:
-            pass
+        print(f"   ✅ 成功选择了 {selected_count} 架飞机")
 
-        time.sleep(1)
+        # 关闭下拉框 - 按ESC键而不是点击body，避免意外点击
+        try:
+            page.actions.down_keys('escape')
+        except:
+            # 如果ESC失败，再尝试点击下拉框按钮本身
+            try:
+                aircraft_dropdown.click(by_js=True)
+            except:
+                pass
+
+        time.sleep(2)
+
+        # 验证最终选择的飞机（调试用）
+        print("   🔍 验证最终选择的飞机...")
+        final_option_elements = page.eles('tag:a@role=option')
+        final_selected = []
+        for ele in final_option_elements:
+            check_mark = ele.ele('tag:span@@class=glyphicon glyphicon-ok check-mark')
+            if check_mark:
+                text_ele = ele.ele('tag:span@@class=text')
+                if text_ele:
+                    final_selected.append(text_ele.text.strip())
+
+        print(f"   📋 最终选中的飞机: {', '.join(final_selected)}")
+
+        # 检查是否有额外的飞机被选中
+        expected_aircraft = ["C909-185/B-652G", "C909-196/B-656E"]
+        unexpected = [ac for ac in final_selected if ac not in expected_aircraft]
+        if unexpected:
+            print(f"   ⚠️ 警告：检测到意外选中的飞机: {', '.join(unexpected)}")
+            print("   🔄 尝试再次清空并重新选择...")
+            # 重新打开下拉框
+            aircraft_dropdown.click(by_js=True)
+            time.sleep(2)
+
+            # 再次清空所有选项
+            option_elements = page.eles('tag:a@role=option')
+            for ele in option_elements:
+                check_mark = ele.ele('tag:span@@class=glyphicon glyphicon-ok check-mark')
+                if check_mark:
+                    text_ele = ele.ele('tag:span@@class=text')
+                    if text_ele:
+                        print(f"   🔄 再次取消: {text_ele.text.strip()}")
+                        ele.click(by_js=True)
+                        time.sleep(0.3)
+
+            time.sleep(1)
+
+            # 重新选择目标飞机
+            for aircraft in aircraft_list:
+                target_text = aircraft_mapping.get(aircraft, aircraft)
+                option_elements = page.eles('tag:a@role=option')
+                for ele in option_elements:
+                    text_ele = ele.ele('tag:span@@class=text')
+                    if text_ele and text_ele.text.strip() == target_text:
+                        print(f"   ✅ 再次选择: {text_ele.text}")
+                        ele.click(by_js=True)
+                        time.sleep(0.5)
+                        break
+
+            # 再次关闭下拉框
+            try:
+                page.actions.down_keys('escape')
+            except:
+                pass
+
+            time.sleep(2)
+
         return True
 
     def extract_table_data(self, page):

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-航班状态邮件通知模块
+航段状态邮件通知模块
 基于 YAML 配置文件的邮件发送器
+专门用于航段(leg)数据的状态变化通知
 """
 import smtplib
 import os
@@ -18,8 +19,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.logger import get_logger
 
 
-class FlightStatusNotifier:
-    """航班状态邮件通知器"""
+class LegStatusNotifier:
+    """航段状态邮件通知器
+    专门用于航段(leg)数据的状态变化通知
+    """
 
     def __init__(self, config_file=None):
         """
@@ -135,9 +138,9 @@ class FlightStatusNotifier:
             print(f"❌ 邮件发送失败: {e}")
             return False
 
-    def send_flight_status_notification(self, status_changes: list, date_str: str) -> bool:
+    def send_leg_status_notification(self, status_changes: list, date_str: str) -> bool:
         """
-        发送航班状态变化通知
+        发送航段状态变化通知
 
         Args:
             status_changes: 状态变化列表，每个元素是状态描述字符串
@@ -149,7 +152,7 @@ class FlightStatusNotifier:
         if not status_changes:
             return True
 
-        subject = f"航班状态 - {date_str}"
+        subject = f"航段状态 - {date_str}"
         body = '\n'.join(status_changes)
 
         return self.send_email(subject, body)
@@ -157,13 +160,13 @@ class FlightStatusNotifier:
 
 if __name__ == "__main__":
     # 测试代码
-    print("🧪 邮件通知器测试")
+    print("🧪 航段状态邮件通知器测试")
     print("=" * 60)
 
-    notifier = FlightStatusNotifier()
+    notifier = LegStatusNotifier()
 
     if notifier.is_enabled():
-        print("✅ 邮件通知器已启用")
+        print("✅ 航段状态邮件通知器已启用")
         print(f"📧 发件人: {notifier.config['smtp_user']}")
         print(f"📮 收件人: {notifier.config['receiver_email']}")
 
@@ -173,7 +176,7 @@ if __name__ == "__main__":
             "VJ107（河内-昆岛）已起飞，预计1小时55分钟后落地"
         ]
 
-        success = notifier.send_flight_status_notification(test_changes, "2026-01-09")
+        success = notifier.send_leg_status_notification(test_changes, "2026-01-09")
         print(f"📤 发送结果: {'成功' if success else '失败'}")
     else:
         print("⚠️ 邮件通知器未启用")

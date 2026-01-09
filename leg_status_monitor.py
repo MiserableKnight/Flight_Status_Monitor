@@ -15,7 +15,7 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
 from core.logger import get_logger
-from core.email_notifier import FlightStatusNotifier
+from core.leg_status_notifier import LegStatusNotifier
 
 # 初始化日志
 log = get_logger()
@@ -220,7 +220,7 @@ def monitor_flight_status(target_date=None):
 
     # 发送通知
     if current_notifications:
-        notifier = FlightStatusNotifier()
+        notifier = LegStatusNotifier()
 
         if notifier.is_enabled():
             subject = f"航班状态 - {target_date}"

@@ -94,44 +94,6 @@ def update_leg_data(target_date=None):
         log(f"Failed to read daily data: {e}", "ERROR")
         return False
 
-    # 🔍 检测状态变化（在更新之前）
-    print(f"\n🔍 检测状态变化...")
-    try:
-        # 导入状态监控模块
-        sys.path.insert(0, project_root)
-        from leg_status_monitor import load_last_status, get_flight_status_key, get_flight_status_hash
-
-        last_status = load_last_status()
-        has_changes = False
-        changes_detected = []
-
-        for _, row in df_daily.iterrows():
-            key = get_flight_status_key(row)
-            hash_value = get_flight_status_hash(row)
-
-            if key in last_status:
-                if last_status[key] != hash_value:
-                    has_changes = True
-                    changes_detected.append(key)
-                    print(f"   ✅ 状态变化: {key}")
-            else:
-                # 新航班
-                has_changes = True
-                changes_detected.append(key)
-                print(f"   🆕 新航班: {key}")
-
-        if not has_changes:
-            print(f"\n   ℹ️ 状态无变化，跳过更新主表")
-            log(f"No status changes detected, skipping update", "INFO")
-            return True  # 返回True表示任务完成（虽然没有更新）
-
-        print(f"\n   ✅ 检测到 {len(changes_detected)} 个状态变化，将继续更新主表")
-
-    except Exception as e:
-        print(f"   ⚠️ 状态检测失败，将继续更新：{e}")
-        log(f"Status detection failed: {e}", "WARNING")
-        has_changes = True  # 如果检测失败，默认继续更新
-
     # 如果主文件不存在，创建新的
     if not os.path.exists(main_file):
         print(f"⚠️ 主文件不存在，将创建新文件")

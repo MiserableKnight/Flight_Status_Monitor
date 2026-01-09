@@ -33,9 +33,6 @@ AIRPORT_MAPPING = {
     'VVTS-新山一国际机场': '胡志明'
 }
 
-# 状态文件路径
-STATUS_FILE = os.path.join(project_root, 'data', 'leg_last_status.json')
-
 
 def parse_time_vietnam(time_str):
     """
@@ -68,46 +65,6 @@ def is_flight_completed(row):
     on = not pd.isna(row['ON']) and row['ON'] != ''
     inn = not pd.isna(row['IN']) and row['IN'] != ''
     return out and off and on and inn
-
-
-def get_flight_status_key(row):
-    """生成航班状态唯一标识"""
-    return f"{row['执飞飞机']}_{row['航班号']}_{row['日期']}"
-
-
-def get_flight_status_hash(row):
-    """生成航班状态哈希值（用于比较状态是否变化）"""
-    status = {
-        'OUT': str(row['OUT']) if not pd.isna(row['OUT']) and row['OUT'] != '' else None,
-        'OFF': str(row['OFF']) if not pd.isna(row['OFF']) and row['OFF'] != '' else None,
-        'ON': str(row['ON']) if not pd.isna(row['ON']) and row['ON'] != '' else None,
-        'IN': str(row['IN']) if not pd.isna(row['IN']) and row['IN'] != '' else None
-    }
-    return str(status)
-
-
-def load_last_status():
-    """加载上次保存的状态"""
-    if os.path.exists(STATUS_FILE):
-        try:
-            import json
-            with open(STATUS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            log(f"加载状态文件失败: {e}", "ERROR")
-            return {}
-    return {}
-
-
-def save_current_status(status_dict):
-    """保存当前状态"""
-    try:
-        import json
-        os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
-        with open(STATUS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(status_dict, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        log(f"保存状态文件失败: {e}", "ERROR")
 
 
 def get_current_flight_status(df_aircraft, aircraft_num):
@@ -181,54 +138,15 @@ def get_current_flight_status(df_aircraft, aircraft_num):
     return [f"{aircraft_num}暂无航班数据"]
 
 
-def detect_status_changes(df_new):
-    """
-    检测航班状态变化
-
-    Args:
-        df_new: 新获取的航班数据
-
-    Returns:
-        (是否有变化, 通知消息列表)
-    """
-    last_status = load_last_status()
-    current_status = {}
-    notifications = []
-    has_changes = False
-
-    # 构建当前状态字典
-    for _, row in df_new.iterrows():
-        key = get_flight_status_key(row)
-        hash_value = get_flight_status_hash(row)
-        current_status[key] = hash_value
-
-        # 检查是否有变化
-        if key in last_status:
-            if last_status[key] != hash_value:
-                has_changes = True
-                print(f"   检测到状态变化: {key}")
-        else:
-            # 新增的航班
-            has_changes = True
-            print(f"   检测到新航班: {key}")
-
-    # 如果有变化，生成当前状态通知
-    if has_changes:
-        for aircraft_num in AIRCRAFT_FLIGHTS.keys():
-            df_aircraft = df_new[df_new['执飞飞机'] == aircraft_num]
-            if len(df_aircraft) > 0:
-                status_messages = get_current_flight_status(df_aircraft, aircraft_num)
-                notifications.extend(status_messages)
-
-    # 保存当前状态
-    save_current_status(current_status)
-
-    return has_changes, notifications
-
-
 def monitor_flight_status(target_date=None):
     """
     监控航班状态变化并发送通知
+
+    逻辑：
+    1. 生成当前状态
+    2. 对比上次保存的邮件状态
+    3. 只有状态变化才发送邮件
+    4. 发送成功后保存当前状态
 
     Args:
         target_date: 目标日期（YYYY-MM-DD格式），默认为今天
@@ -258,36 +176,80 @@ def monitor_flight_status(target_date=None):
 
     # 生成当前状态通知（基于最新数据）
     print("\n📊 生成当前航班状态...")
-    notifications = []
+    current_notifications = []
 
+    # 为每架飞机生成状态消息
     for aircraft_num in AIRCRAFT_FLIGHTS.keys():
         df_aircraft = df[df['执飞飞机'] == aircraft_num]
         if len(df_aircraft) > 0:
             status_messages = get_current_flight_status(df_aircraft, aircraft_num)
-            notifications.extend(status_messages)
+            current_notifications.extend(status_messages)
 
-    if not notifications:
+    if not current_notifications:
         print("   ℹ️ 无航班状态数据")
         return True
 
+    # 生成当前状态的唯一标识（用于对比）
+    import hashlib
+    current_status_text = '\n'.join(current_notifications)
+    current_status_hash = hashlib.md5(current_status_text.encode('utf-8')).hexdigest()
+
+    # 加载上次发送的邮件状态
+    last_email_status_file = os.path.join(project_root, 'data', 'last_email_status.json')
+    last_status_hash = None
+
+    if os.path.exists(last_email_status_file):
+        try:
+            with open(last_email_status_file, 'r', encoding='utf-8') as f:
+                import json
+                last_email_data = json.load(f)
+                last_status_hash = last_email_data.get('status_hash')
+                print(f"   📋 上次邮件状态哈希: {last_status_hash}")
+        except Exception as e:
+            print(f"   ⚠️ 读取上次邮件状态失败: {e}")
+
+    # 对比状态
+    print(f"   📊 当前状态哈希: {current_status_hash}")
+
+    if current_status_hash == last_status_hash:
+        print(f"\n   ℹ️ 状态无变化，跳过邮件发送")
+        log("No status changes detected, skipping email notification", "INFO")
+        return True
+
+    print(f"\n   ✅ 检测到状态变化，发送邮件通知")
+
     # 发送通知
-    if notifications:
+    if current_notifications:
         notifier = FlightStatusNotifier()
 
         if notifier.is_enabled():
             subject = f"航班状态 - {target_date}"
-            body = '\n'.join(notifications)
+            body = '\n'.join(current_notifications)
 
             if notifier.send_email(subject, body):
-                print(f"   ✅ 已发送状态通知邮件（{len(notifications)}条）")
-                log(f"Sent flight status notification: {len(notifications)} updates", "SUCCESS")
+                print(f"   ✅ 已发送状态通知邮件（{len(current_notifications)}条）")
+                log(f"Sent flight status notification: {len(current_notifications)} updates", "SUCCESS")
+
+                # 保存当前邮件状态
+                try:
+                    import json
+                    os.makedirs(os.path.dirname(last_email_status_file), exist_ok=True)
+                    with open(last_email_status_file, 'w', encoding='utf-8') as f:
+                        json.dump({
+                            'status_hash': current_status_hash,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            'notifications': current_notifications
+                        }, f, ensure_ascii=False, indent=2)
+                    print(f"   💾 已保存当前邮件状态")
+                except Exception as e:
+                    print(f"   ⚠️ 保存邮件状态失败: {e}")
             else:
                 print(f"   ⚠️ 邮件发送失败")
         else:
             print(f"   ⚠️ 邮件通知未启用")
             # 打印通知内容
             print("\n📧 通知内容：")
-            for msg in notifications:
+            for msg in current_notifications:
                 print(f"   - {msg}")
 
     return True

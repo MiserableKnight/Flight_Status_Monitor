@@ -22,9 +22,14 @@ sys.path.insert(0, project_root)
 
 from core.logger import get_logger
 from core.leg_status_notifier import LegStatusNotifier
+from config.config_loader import load_config
 
 # 初始化日志
 log = get_logger()
+
+# 加载统一配置
+config_loader = load_config()
+gmail_config = config_loader.get_gmail_config()
 
 # 每架飞机的航班序列（按时间顺序，从晚到早）
 AIRCRAFT_FLIGHTS = {
@@ -115,7 +120,7 @@ def get_current_flight_status(df_aircraft, aircraft_num):
             vn_time = parse_time_vietnam(on_val)
             time_str = f"越南时间{vn_time}" if vn_time else "越南时间未知"
             airport = get_airport_name(current_row['着陆机场'])
-            return [f"{aircraft_num}执行{current_flight}航班，已于{time_str}在{airport}着陆。"]
+            return [f"{aircraft_num}执行{current_flight}航班，已于{time_str}在{airport}落地。"]
 
         elif off_val is not None:
             vn_time = parse_time_vietnam(off_val)
@@ -224,9 +229,9 @@ def monitor_flight_status(target_date=None):
 
     print(f"\n   ✅ 检测到状态变化，发送邮件通知")
 
-    # 发送通知
+    # 发送通知（使用统一配置）
     if current_notifications:
-        notifier = LegStatusNotifier()
+        notifier = LegStatusNotifier(config_dict=gmail_config)
 
         if notifier.is_enabled():
             subject = f"航班状态 - {target_date}"

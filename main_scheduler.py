@@ -441,8 +441,8 @@ class TaskScheduler:
                     df = pd.read_csv(leg_data_file)
                     today = datetime.now().strftime('%Y-%m-%d')
 
-                    # 只读取今天的最新数据
-                    today_data = df[df['date'] == today].to_dict('records')
+                    # 只读取今天的最新数据（CSV列名是中文'日期'）
+                    today_data = df[df['日期'] == today].to_dict('records')
 
                     if today_data:
                         self.flight_tracker.update_from_latest_leg_data(today_data)

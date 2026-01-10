@@ -182,14 +182,14 @@ class FlightTracker:
             today = datetime.now().strftime('%Y-%m-%d')
 
             for _, row in df.iterrows():
-                aircraft = row.get('aircraft_registration')
-                flight_number = row.get('flight_number')
+                aircraft = row.get('执飞飞机')
+                flight_number = row.get('航班号')
 
                 if not aircraft or not flight_number:
                     continue
 
-                # 只关注今天的航班
-                flight_date = row.get('date')
+                # 只关注今天的航班（CSV列名是中文'日期'）
+                flight_date = row.get('日期')
                 if flight_date != today:
                     continue
 
@@ -197,12 +197,12 @@ class FlightTracker:
                 if aircraft not in self.flights:
                     self.flights[aircraft] = FlightStatus(flight_number, aircraft)
 
-                # 更新状态
+                # 转换中文列名为英文键名
                 leg_data = {
-                    'pushback_time': row.get('pushback_time'),
-                    'takeoff_time': row.get('takeoff_time'),
-                    'landing_time': row.get('landing_time'),
-                    'in_gate_time': row.get('in_gate_time')
+                    'pushback_time': row.get('OUT'),
+                    'takeoff_time': row.get('OFF'),
+                    'landing_time': row.get('ON'),
+                    'in_gate_time': row.get('IN')
                 }
                 self.flights[aircraft].update_status(leg_data)
 
@@ -333,11 +333,11 @@ class FlightTracker:
         从最新的leg数据更新所有航班状态
 
         Args:
-            leg_data_list: leg数据列表
+            leg_data_list: leg数据列表（使用中文列名）
         """
         for leg_data in leg_data_list:
-            aircraft = leg_data.get('aircraft_registration')
-            flight_number = leg_data.get('flight_number')
+            aircraft = leg_data.get('执飞飞机')
+            flight_number = leg_data.get('航班号')
 
             if not aircraft or not flight_number:
                 continue
@@ -346,7 +346,15 @@ class FlightTracker:
             if aircraft not in self.flights:
                 self.flights[aircraft] = FlightStatus(flight_number, aircraft)
 
-            self.flights[aircraft].update_status(leg_data)
+            # 转换中文列名为英文键名
+            converted_leg_data = {
+                'pushback_time': leg_data.get('OUT'),
+                'takeoff_time': leg_data.get('OFF'),
+                'landing_time': leg_data.get('ON'),
+                'in_gate_time': leg_data.get('IN')
+            }
+
+            self.flights[aircraft].update_status(converted_leg_data)
 
         self.log(f"已更新 {len(self.flights)} 架飞机的航班状态")
 

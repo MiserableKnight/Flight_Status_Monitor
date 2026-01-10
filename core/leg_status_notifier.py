@@ -7,6 +7,7 @@
 import smtplib
 import os
 import yaml
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
@@ -22,34 +23,69 @@ from core.logger import get_logger
 class LegStatusNotifier:
     """航段状态邮件通知器
     专门用于航段(leg)数据的状态变化通知
+    优先从 config.ini 读取配置，兼容旧的 email_config.yaml
     """
 
-    def __init__(self, config_file=None):
+    def __init__(self, config_file=None, config_dict=None):
         """
         初始化通知器
 
         Args:
-            config_file: 配置文件路径，默认为项目根目录下的 email_config.yaml
+            config_file: 旧的 YAML 配置文件路径（已弃用，仅为向后兼容）
+            config_dict: 配置字典（从 config.ini 的 [gmail] 段读取）
         """
         self.log = get_logger()
 
-        # 确定配置文件路径
-        if config_file is None:
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            config_file = os.path.join(project_root, 'email_config.yaml')
-
-        # 加载配置
-        self.config = self._load_config(config_file)
+        # 优先使用 config_dict（新方式：从 config.ini 读取）
+        if config_dict:
+            self.config = self._load_from_dict(config_dict)
+            self.config_source = "config.ini"
+        else:
+            # 回退到 YAML 文件（旧方式：向后兼容）
+            self.config = self._load_from_yaml(config_file)
+            self.config_source = "email_config.yaml"
 
         if self.config:
             self.enabled = True
-            self.log("邮件通知器初始化成功")
+            self.log(f"邮件通知器初始化成功（配置来源: {self.config_source}）")
         else:
             self.enabled = False
             self.log("邮件通知器初始化失败", "WARNING")
 
-    def _load_config(self, config_file):
-        """加载 YAML 配置文件"""
+        # 邮件发送频率控制
+        self.last_send_time = 0
+        self.min_send_interval = 30  # 最小发送间隔(秒),避免Gmail限流
+
+    def _load_from_dict(self, config_dict: dict) -> dict:
+        """从配置字典加载（新方式）"""
+        if not config_dict:
+            return None
+
+        # 映射 config.ini 的字段名到内部格式
+        mapped_config = {
+            'smtp_server': 'smtp.gmail.com',
+            'smtp_port': 587,
+            'smtp_user': config_dict.get('sender_email', ''),
+            'smtp_password': config_dict.get('app_password', ''),
+            'receiver_email': ', '.join(config_dict.get('recipients', [])),
+            'sender_name': config_dict.get('sender_name', '航班监控系统'),
+            'use_ssl': False,
+            'use_tls': True
+        }
+
+        # 验证必需字段
+        if not mapped_config['smtp_user'] or not mapped_config['smtp_password']:
+            self.log("配置缺少必需字段: sender_email 或 app_password", "ERROR")
+            return None
+
+        return mapped_config
+
+    def _load_from_yaml(self, config_file):
+        """从 YAML 配置文件加载（旧方式，向后兼容）"""
+        if config_file is None:
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            config_file = os.path.join(project_root, 'email_config.yaml')
+
         if not os.path.exists(config_file):
             self.log(f"配置文件不存在: {config_file}", "ERROR")
             return None

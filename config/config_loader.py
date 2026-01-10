@@ -126,10 +126,14 @@ class ConfigLoader:
 
     def get_gmail_config(self) -> Dict[str, str]:
         """
-        获取Gmail配置
+        获取Gmail配置（统一邮件配置源）
 
         Returns:
-            Dict[str, str]: Gmail配置字典
+            Dict[str, str]: Gmail配置字典，包含:
+                - sender_email: 发件人邮箱
+                - app_password: Gmail应用专用密码
+                - recipients: 收件人列表
+                - sender_name: 发件人显示名称
         """
         if not self.config.has_section('gmail'):
             return {}
@@ -139,6 +143,7 @@ class ConfigLoader:
 
         config['sender_email'] = section.get('sender_email', '')
         config['app_password'] = section.get('app_password', '')
+        config['sender_name'] = section.get('sender_name', '航班监控系统')
 
         recipients = section.get('recipients', '')
         config['recipients'] = [r.strip() for r in recipients.split(',') if r.strip()]

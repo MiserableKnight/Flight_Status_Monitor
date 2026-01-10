@@ -32,10 +32,12 @@ class GmailNotifier:
             self.sender_email = config.get('sender_email', '')
             self.app_password = config.get('app_password', '')
             self.recipients = config.get('recipients', [])
+            self.sender_name = config.get('sender_name', '航班监控系统')
         else:
             self.sender_email = sender_email or ''
             self.app_password = app_password or ''
             self.recipients = recipients or []
+            self.sender_name = '航班监控系统'
 
         # 检查配置完整性
         if not self.sender_email or not self.app_password:
@@ -72,7 +74,7 @@ class GmailNotifier:
         try:
             # 创建邮件对象
             msg = MIMEMultipart()
-            msg['From'] = self.sender_email
+            msg['From'] = f"{self.sender_name} <{self.sender_email}>"
             msg['To'] = ', '.join(self.recipients) if self.recipients else self.sender_email
             msg['Subject'] = subject
 

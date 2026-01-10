@@ -214,6 +214,18 @@ class LegFetcher(BaseFetcher):
                             # 去掉末尾的 &nbsp;
                             if text.endswith('&nbsp;'):
                                 text = text[:-6].strip()
+
+                            # 特殊处理：标准化航班号（将EU/VJ统一为VJ）
+                            # 假设当前正在处理第3列（航班号），索引为2
+                            if len(row_data) == 2:  # 已经处理了2列，当前是第3列（航班号）
+                                # 标准化航班号：统一EU和VJ为VJ
+                                text = str(text).strip().upper()
+                                # 提取数字部分
+                                import re
+                                match = re.search(r'\d+', text)
+                                if match:
+                                    text = f'VJ{match.group()}'
+
                             row_data.append(text)
 
                     # 确保始终有15列（防御性检查）
@@ -260,13 +272,55 @@ class LegFetcher(BaseFetcher):
         if "lineLogController/index.html" in current_url:
             print("   ✅ 已在航段数据页面")
         else:
-            print(f"   📍 正在导航到: {target_url}")
+            print(f"   📍 当前页面: {current_url}")
+
+            # ========== 策略：多阶段导航 ==========
+            # 阶段1: 如果不在8004端口，先跳转到mainController首页初始化
+            if "cis.comac.cc:8004" not in current_url and "cis.comac.cc:8010" in current_url:
+                print("   🔄 检测到从8010端口访问，先跳转到8004首页初始化...")
+                intermediate_url = "https://cis.comac.cc:8004/caphm/mainController/index.html"
+                page.get(url=intermediate_url)
+
+                # 等待中间页面加载
+                print("   ⏳ 等待8004首页初始化...")
+                for i in range(8):
+                    time.sleep(1)
+                    if "mainController/index.html" in page.url:
+                        print(f"   ✅ 8004首页已就绪 ({i+1}秒)")
+                        break
+
+                # 额外等待，确保JavaScript框架完全加载
+                print("   ⏳ 等待页面框架完全加载...")
+                time.sleep(3)
+
+            # 阶段2: 现在跳转到目标页面
+            print(f"   🎯 目标页面: {target_url}")
+            print(f"   🚀 开始导航...")
+
             page.get(url=target_url)
 
-            # 等待页面加载完成
-            print("   ⏳ 等待页面加载...")
-            time.sleep(5)  # 增加等待时间到5秒
-            print("   ✅ 已导航到航段数据页面")
+            # 验证是否真的导航到了目标页面
+            print("   🔍 验证页面是否已切换...")
+            time.sleep(2)  # 给页面一些时间开始加载
+
+            max_wait = 10
+            navigated = False
+            for i in range(max_wait):
+                current_url = page.url
+                print(f"   📍 第{i+1}次检查: {current_url}")
+
+                if "lineLogController/index.html" in current_url:
+                    print(f"   ✅ 成功导航到航段数据页面!")
+                    navigated = True
+                    break
+                else:
+                    time.sleep(1)
+
+            if not navigated:
+                print(f"   ❌ 导航失败！页面未切换到目标地址")
+                print(f"   📍 最终停留: {page.url}")
+                print(f"   🎯 目标地址: {target_url}")
+                return None
 
         # ========== 步骤2: 选择飞机 ==========
         print("\n🎯 步骤2: 选择飞机")

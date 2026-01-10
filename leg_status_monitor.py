@@ -23,6 +23,7 @@ sys.path.insert(0, project_root)
 from core.logger import get_logger
 from core.leg_status_notifier import LegStatusNotifier
 from config.config_loader import load_config
+from config.flight_schedule import FlightSchedule
 
 # 初始化日志
 log = get_logger()
@@ -30,12 +31,6 @@ log = get_logger()
 # 加载统一配置
 config_loader = load_config()
 gmail_config = config_loader.get_gmail_config()
-
-# 每架飞机的航班序列（按时间顺序，从晚到早）
-AIRCRAFT_FLIGHTS = {
-    'B-656E': ['VJ107', 'VJ118', 'VJ119', 'VJ108'],
-    'B-652G': ['VJ105', 'VJ112', 'VJ113', 'VJ106']
-}
 
 # 机场名称映射
 AIRPORT_MAPPING = {
@@ -69,6 +64,25 @@ def get_airport_name(airport_full):
     return AIRPORT_MAPPING.get(str(airport_full), str(airport_full).split('-')[-1] if '-' in str(airport_full) else str(airport_full))
 
 
+def get_flight_route(flight_number):
+    """获取航班航线描述（中文）"""
+    flight_info = FlightSchedule.get_flight_info(flight_number)
+    if flight_info and 'route' in flight_info:
+        route = flight_info['route']
+        # 将机场代码转换为中文
+        route_mapping = {
+            'HAN': '河内',
+            'VCS': '昆岛',
+            'SGN': '胡志明'
+        }
+        parts = route.split('-')
+        if len(parts) == 2:
+            departure = route_mapping.get(parts[0], parts[0])
+            arrival = route_mapping.get(parts[1], parts[1])
+            return f"{departure}-{arrival}"
+    return ""
+
+
 def is_flight_completed(row):
     """判断航班是否已完成（所有4个阶段都有值）"""
     out = not pd.isna(row['OUT']) and row['OUT'] != ''
@@ -78,15 +92,80 @@ def is_flight_completed(row):
     return out and off and on and inn
 
 
+def get_flight_sequence_sorted(df_aircraft):
+    """
+    从飞机数据中获取按计划时间排序的航班序列
+
+    ⚠️ 重要修复: 使用航线链完整性检测
+    - 根据实际执行的航班判断所属航线链
+    - 返回完整的航线链序列,而不是仅返回已出现的航班
+    - 只有完成航线链的最后一个航班(VJ106/VJ108回到河内),才算完成当日任务
+
+    Args:
+        df_aircraft: 该飞机的所有航班数据
+
+    Returns:
+        list: 完整的航线链航班号列表(按计划时间排序)
+    """
+    # 获取实际出现的航班号
+    actual_flights = []
+    for _, row in df_aircraft.iterrows():
+        flight_num = row['航班号']
+        if flight_num not in actual_flights:
+            actual_flights.append(flight_num)
+
+    if not actual_flights:
+        return []
+
+    # 根据第一个航班判断航线类型
+    first_flight = actual_flights[0]
+    route_chain = FlightSchedule.get_route_chain(first_flight)
+
+    if route_chain:
+        # 找到所属航线链,返回完整序列
+        # 这样即使只执行了VJ118,也知道后面还有VJ119和VJ108
+        return route_chain
+    else:
+        # 未知航线,使用实际航班按时间排序
+        flight_list = []
+        for _, row in df_aircraft.iterrows():
+            flight_num = row['航班号']
+            flight_info = FlightSchedule.get_flight_info(flight_num)
+
+            if flight_info:
+                scheduled_time = flight_info['scheduled_departure']
+            else:
+                scheduled_time = row['OUT'] if pd.notna(row['OUT']) else '00:00'
+
+            flight_list.append({
+                'flight_number': flight_num,
+                'scheduled_time': scheduled_time
+            })
+
+        flight_list.sort(key=lambda x: x['scheduled_time'])
+        return [f['flight_number'] for f in flight_list]
+
+
 def get_current_flight_status(df_aircraft, aircraft_num):
-    """获取飞机当前正在执行的航班状态"""
-    flight_sequence = AIRCRAFT_FLIGHTS.get(aircraft_num, [])
+    """
+    获取飞机当前正在执行的航班状态
+
+    ⚠️ 重要: 现在基于完整航线链判断状态
+    - 只有完成航线链最后一个航班(VJ106/VJ108),才算完成当日所有航班
+    - 中间航班完成后,会显示下一个计划航班
+    """
+    # 获取完整的航线链序列
+    flight_sequence = get_flight_sequence_sorted(df_aircraft)
+
+    if not flight_sequence:
+        return [f"{aircraft_num}暂无航班数据"]
 
     current_flight = None
     current_row = None
     last_completed_flight = None
     last_completed_row = None
 
+    # 遍历航线链,查找当前执行和已完成的航班
     for flight_num in flight_sequence:
         flight_rows = df_aircraft[df_aircraft['航班号'] == flight_num]
         if len(flight_rows) > 0:
@@ -100,7 +179,13 @@ def get_current_flight_status(df_aircraft, aircraft_num):
                 current_flight = flight_num
                 current_row = row
                 break
+        else:
+            # 航线链中的航班还未出现在数据中
+            current_flight = flight_num
+            current_row = None
+            break
 
+    # 情况1: 有正在执行的航班
     if current_row is not None:
         out_val = current_row['OUT'] if not pd.isna(current_row['OUT']) and current_row['OUT'] != '' else None
         off_val = current_row['OFF'] if not pd.isna(current_row['OFF']) and current_row['OFF'] != '' else None
@@ -108,43 +193,73 @@ def get_current_flight_status(df_aircraft, aircraft_num):
         inn_val = current_row['IN'] if not pd.isna(current_row['IN']) and current_row['IN'] != '' else None
 
         if inn_val is not None:
+            # 已落地
             airport = get_airport_name(current_row['着陆机场'])
+            route = get_flight_route(current_flight)
+            route_str = f"（{route}）" if route else ""
             current_idx = flight_sequence.index(current_flight)
-            if current_idx < len(flight_sequence) - 1:
-                next_flight = flight_sequence[current_idx + 1]
-                return [f"{aircraft_num}在{airport}；计划执行{next_flight}。"]
+
+            # 检查是否是航线链最后一个航班
+            if current_idx == len(flight_sequence) - 1:
+                # 最后一个航班落地,完成当日所有任务
+                return [f"{aircraft_num}停靠{airport}；已完成今日所有航班。"]
             else:
-                return [f"{aircraft_num}在{airport}；已完成今日航班。"]
+                # 还有后续航班
+                next_flight = flight_sequence[current_idx + 1]
+                return [f"{aircraft_num}停靠{airport}；计划执行{next_flight}。"]
 
         elif on_val is not None:
+            # 空中/落地但未滑入
             vn_time = parse_time_vietnam(on_val)
             time_str = f"越南时间{vn_time}" if vn_time else "越南时间未知"
             airport = get_airport_name(current_row['着陆机场'])
-            return [f"{aircraft_num}执行{current_flight}航班，已于{time_str}在{airport}落地。"]
+            route = get_flight_route(current_flight)
+            route_str = f"（{route}）" if route else ""
+            return [f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}在{airport}落地。"]
 
         elif off_val is not None:
+            # 已起飞
             vn_time = parse_time_vietnam(off_val)
             time_str = f"越南时间{vn_time}" if vn_time else "越南时间未知"
             airport = get_airport_name(current_row['起飞机场'])
-            return [f"{aircraft_num}执行{current_flight}航班，已于{time_str}从{airport}起飞。"]
+            route = get_flight_route(current_flight)
+            route_str = f"（{route}）" if route else ""
+            return [f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}从{airport}起飞。"]
 
         elif out_val is not None:
+            # 已滑出
             vn_time = parse_time_vietnam(out_val)
             time_str = f"越南时间{vn_time}" if vn_time else "越南时间未知"
             airport = get_airport_name(current_row['起飞机场'])
-            return [f"{aircraft_num}执行{current_flight}航班，已于{time_str}滑出。"]
+            route = get_flight_route(current_flight)
+            route_str = f"（{route}）" if route else ""
+            return [f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}滑出。"]
 
         else:
-            return [f"{aircraft_num}计划执行{current_flight}航班。"]
+            # 计划中
+            route = get_flight_route(current_flight)
+            route_str = f"（{route}）" if route else ""
+            return [f"{aircraft_num}计划执行{current_flight}{route_str}。"]
 
+    # 情况2: 上一航班已完成,查看下一个航班
     elif last_completed_row is not None:
         airport = get_airport_name(last_completed_row['着陆机场'])
         last_idx = flight_sequence.index(last_completed_flight)
-        if last_idx < len(flight_sequence) - 1:
-            next_flight = flight_sequence[last_idx + 1]
-            return [f"{aircraft_num}在{airport}；计划执行{next_flight}。"]
+
+        # 检查是否是航线链最后一个航班
+        if last_idx == len(flight_sequence) - 1:
+            # 最后一个航班已完成
+            return [f"{aircraft_num}停靠{airport}；已完成今日所有航班。"]
         else:
-            return [f"{aircraft_num}在{airport}；已完成今日所有航班。"]
+            # 还有后续航班
+            next_flight = flight_sequence[last_idx + 1]
+            return [f"{aircraft_num}停靠{airport}；计划执行{next_flight}。"]
+
+    # 情况3: 第一个航班还未开始
+    elif current_flight is not None:
+        route = get_flight_route(current_flight)
+        route_str = f"（{route}）" if route else ""
+        return [f"{aircraft_num}计划执行{current_flight}{route_str}。"]
 
     return [f"{aircraft_num}暂无航班数据"]
 
@@ -189,8 +304,12 @@ def monitor_flight_status(target_date=None):
     print("\n📊 生成当前航班状态...")
     current_notifications = []
 
+    # 动态获取所有飞机（从实际数据中）
+    all_aircraft = df['执飞飞机'].unique()
+    print(f"   ✅ 检测到 {len(all_aircraft)} 架飞机")
+
     # 为每架飞机生成状态消息
-    for aircraft_num in AIRCRAFT_FLIGHTS.keys():
+    for aircraft_num in all_aircraft:
         df_aircraft = df[df['执飞飞机'] == aircraft_num]
         if len(df_aircraft) > 0:
             status_messages = get_current_flight_status(df_aircraft, aircraft_num)

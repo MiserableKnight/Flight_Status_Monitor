@@ -111,9 +111,8 @@ class TaskScheduler:
                 print(f"✅ 任务 {task_name} 执行成功")
                 self.log(f"任务成功: {task_name}", "SUCCESS")
 
-                # 发送成功通知（如果启用）
-                if self.notifier and self.notifier.is_enabled():
-                    self.notifier.send_success_notification(task_name, "脚本执行成功")
+                # 任务成功/失败通知已禁用，仅保留航班状态变化通知
+                # 调度器任务结果通过日志文件记录
 
                 return True
             else:
@@ -122,9 +121,8 @@ class TaskScheduler:
                     print(result.stderr)
                 self.log(f"任务失败: {task_name}", "ERROR")
 
-                # 发送失败通知（如果启用）
-                if self.notifier and self.notifier.is_enabled():
-                    self.notifier.send_error_notification(task_name, result.stderr or "脚本执行失败")
+                # 任务成功/失败通知已禁用，仅保留航班状态变化通知
+                # 调度器任务结果通过日志文件记录
 
                 return False
 
@@ -133,8 +131,8 @@ class TaskScheduler:
             print(f"❌ {error_msg}")
             self.log(f"任务超时: {task_name}", "ERROR")
 
-            if self.notifier and self.notifier.is_enabled():
-                self.notifier.send_error_notification(task_name, error_msg)
+            # 任务成功/失败通知已禁用，仅保留航班状态变化通知
+            # 调度器任务结果通过日志文件记录
 
             return False
 
@@ -142,9 +140,8 @@ class TaskScheduler:
             print(f"❌ 任务执行出错: {e}")
             self.log(f"任务出错: {task_name} - {e}", "ERROR")
 
-            # 发送错误通知
-            if self.notifier and self.notifier.is_enabled():
-                self.notifier.send_error_notification(task_name, str(e))
+            # 任务成功/失败通知已禁用，仅保留航班状态变化通知
+            # 调度器任务结果通过日志文件记录
 
             return False
 
@@ -377,28 +374,14 @@ class TaskScheduler:
             # 短暂休眠避免CPU占用过高
             time.sleep(10)
 
-        # 发送汇总报告
-        self.send_summary_report()
+        # 汇总报告已禁用，仅保留航班状态变化通知
+        # 调度器统计数据通过日志文件记录
 
     def send_summary_report(self):
-        """发送汇总报告"""
-        if not self.notifier or not self.notifier.is_enabled():
-            return
-
-        report_data = {
-            'date': datetime.now().strftime('%Y-%m-%d'),
-            'leg_fetch_count': self.stats['leg_fetch_count'],
-            'leg_success_count': self.stats['leg_success_count'],
-            'leg_failure_count': self.stats['leg_failure_count'],
-            'flight_fetch_count': self.stats['flight_fetch_count'],
-            'flight_success_count': self.stats['flight_success_count'],
-            'flight_failure_count': self.stats['flight_failure_count'],
-            'faults_fetch_count': self.stats['faults_fetch_count'],
-            'faults_success_count': self.stats['faults_success_count'],
-            'faults_failure_count': self.stats['faults_failure_count']
-        }
-
-        self.notifier.send_summary_report(report_data)
+        """发送汇总报告（已禁用）"""
+        # 汇总报告已禁用，仅保留航班状态变化通知
+        # 调度器统计数据通过日志文件记录
+        pass
 
     def fetch_and_update_leg_data(self, target_date=None):
         """
@@ -441,15 +424,28 @@ class TaskScheduler:
                     df = pd.read_csv(leg_data_file)
                     today = datetime.now().strftime('%Y-%m-%d')
 
+                    # 调试信息：检查列名
+                    self.log(f"CSV列名: {df.columns.tolist()}", "INFO")
+
                     # 只读取今天的最新数据（CSV列名是中文'日期'）
-                    today_data = df[df['日期'] == today].to_dict('records')
+                    if '日期' in df.columns:
+                        today_data = df[df['日期'] == today].to_dict('records')
+                    else:
+                        self.log("CSV中缺少'日期'列", "ERROR")
+                        today_data = []
 
                     if today_data:
                         self.flight_tracker.update_from_latest_leg_data(today_data)
                         self.log(f"已更新flight_tracker状态，共{len(today_data)}条记录")
 
+            except KeyError as e:
+                self.log(f"更新flight_tracker失败 - KeyError: {e}", "ERROR")
+                import traceback
+                self.log(traceback.format_exc(), "ERROR")
             except Exception as e:
                 self.log(f"更新flight_tracker失败: {e}", "ERROR")
+                import traceback
+                self.log(traceback.format_exc(), "ERROR")
 
         return update_success
 
@@ -496,7 +492,8 @@ class TaskScheduler:
 
             elif choice == '4':
                 print("\n👋 退出系统")
-                self.send_summary_report()
+                # 汇总报告已禁用，仅保留航班状态变化通知
+                # 调度器统计数据通过日志文件记录
                 break
 
             else:
@@ -523,7 +520,8 @@ def main():
             scheduler.run_daily_schedule()
         except KeyboardInterrupt:
             print("\n\n⚠️ 收到中断信号，正在退出...")
-            scheduler.send_summary_report()
+            # 汇总报告已禁用，仅保留航班状态变化通知
+            # 调度器统计数据通过日志文件记录
         except Exception as e:
             print(f"\n❌ 系统错误: {e}")
             scheduler.log(f"系统错误: {e}", "ERROR")

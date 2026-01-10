@@ -84,6 +84,14 @@ class FlightSchedule:
         }
     }
 
+    # 航线链配置
+    # 每条航线链是一组必须按顺序执行的航班,最终都回到河内
+    # 只有完成航线链的最后一个航班,才算完成当日任务
+    ROUTE_CHAINS = {
+        'ROUTE_A': ['VJ105', 'VJ112', 'VJ113', 'VJ106'],  # 河内→昆岛→胡志明→昆岛→河内
+        'ROUTE_B': ['VJ107', 'VJ118', 'VJ119', 'VJ108']   # 河内→昆岛→胡志明→昆岛→河内
+    }
+
     @classmethod
     def get_flight_info(cls, flight_number: str) -> Optional[Dict]:
         """获取航班信息"""
@@ -93,6 +101,38 @@ class FlightSchedule:
     def get_all_flights(cls) -> List[str]:
         """获取所有航班号列表"""
         return list(cls.FLIGHT_SCHEDULES.keys())
+
+    @classmethod
+    def get_route_chain(cls, flight_number: str) -> Optional[List[str]]:
+        """
+        根据航班号获取所属的完整航线链
+
+        Args:
+            flight_number: 航班号
+
+        Returns:
+            list: 该航班所属航线链的完整航班列表,如果找不到则返回None
+        """
+        for route_flights in cls.ROUTE_CHAINS.values():
+            if flight_number in route_flights:
+                return route_flights
+        return None
+
+    @classmethod
+    def is_last_flight_in_route(cls, flight_number: str) -> bool:
+        """
+        判断航班是否是其航线链的最后一个航班
+
+        Args:
+            flight_number: 航班号
+
+        Returns:
+            bool: 如果是最后一个航班返回True(完成此航班才算完成当日任务)
+        """
+        route_chain = cls.get_route_chain(flight_number)
+        if route_chain:
+            return route_chain[-1] == flight_number
+        return False
 
     @classmethod
     def calculate_scheduled_arrival(cls, flight_number: str, actual_departure_time: datetime) -> datetime:

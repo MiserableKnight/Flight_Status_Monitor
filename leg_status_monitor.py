@@ -22,6 +22,7 @@ sys.path.insert(0, project_root)
 
 from core.logger import get_logger
 from core.leg_status_notifier import LegStatusNotifier
+from core.diversion_detector import DiversionDetector
 from config.config_loader import load_config
 from config.flight_schedule import FlightSchedule
 
@@ -32,7 +33,7 @@ log = get_logger()
 config_loader = load_config()
 gmail_config = config_loader.get_gmail_config()
 
-# 机场名称映射
+# 正常机场的简短名称映射（仅用于正常航班）
 AIRPORT_MAPPING = {
     'VVCS-昆仑国际机场': '昆岛',
     'VVNB-内排国际机场': '河内',
@@ -58,14 +59,67 @@ def parse_time_vietnam(time_str):
 
 
 def get_airport_name(airport_full):
-    """从完整机场名称获取简短名称"""
+    """
+    从完整机场名称获取简短名称（动态解析）
+
+    Args:
+        airport_full: 完整机场名称，如 "VVCS-昆仑国际机场" 或 "VVCI-海防吉碑国际"
+
+    Returns:
+        str: 简短名称，如 "昆岛" 或 "海防吉碑"
+    """
     if pd.isna(airport_full):
         return "未知"
-    return AIRPORT_MAPPING.get(str(airport_full), str(airport_full).split('-')[-1] if '-' in str(airport_full) else str(airport_full))
+
+    airport_str = str(airport_full)
+
+    # 优先使用映射表（用于正常机场）
+    if airport_str in AIRPORT_MAPPING:
+        return AIRPORT_MAPPING[airport_str]
+
+    # 动态解析：从机场代码后的名称中提取
+    # 格式: "VVCI-海防吉碑国际" -> 提取 "海防吉碑"
+    if '-' in airport_str:
+        parts = airport_str.split('-', 1)
+        if len(parts) == 2:
+            name_part = parts[1]  # "海防吉碑国际"
+
+            # 移除通用后缀（按优先级）
+            # "国际机场" -> 移除
+            # "机场" -> 移除
+            # "国际" -> 移除（仅在"机场"不存在时）
+            if name_part.endswith('国际机场'):
+                name_part = name_part[:-4]
+            elif name_part.endswith('机场'):
+                name_part = name_part[:-2]
+            elif name_part.endswith('国际'):
+                name_part = name_part[:-2]
+
+            return name_part if name_part else airport_str
+
+    # 如果没有 '-'，直接返回
+    return airport_str
 
 
-def get_flight_route(flight_number):
-    """获取航班航线描述（中文）"""
+def get_flight_route(flight_number, departure_airport=None, arrival_airport=None):
+    """
+    获取航班航线描述（中文）
+
+    Args:
+        flight_number: 航班号
+        departure_airport: 起飞机场（可选，用于显示实际航线）
+        arrival_airport: 着陆机场（可选，用于显示实际航线）
+
+    Returns:
+        str: 航线描述，如 "河内-昆岛"
+    """
+    # 如果提供了实际机场信息，优先使用实际航线
+    if departure_airport and arrival_airport:
+        dep_short = get_airport_name(departure_airport)
+        arr_short = get_airport_name(arrival_airport)
+        return f"{dep_short}-{arr_short}"
+
+    # 否则使用计划航线
     flight_info = FlightSchedule.get_flight_info(flight_number)
     if flight_info and 'route' in flight_info:
         route = flight_info['route']
@@ -146,6 +200,54 @@ def get_flight_sequence_sorted(df_aircraft):
         return [f['flight_number'] for f in flight_list]
 
 
+def generate_diversion_notification(aircraft_num, flight_num, diversion_info, row):
+    """
+    生成备降通知
+
+    Args:
+        aircraft_num: 飞机号
+        flight_num: 航班号
+        diversion_info: 备降信息字典
+        row: 航班数据行
+
+    Returns:
+        str: 备降通知文本
+    """
+    detector = DiversionDetector()
+    diversion_type = detector.get_diversion_type_description(diversion_info['diversion_type'])
+
+    notification = f"⚠️ {aircraft_num} 备降事件：{flight_num} {diversion_type}，原计划{diversion_info['original_route']}，实际执行{diversion_info['actual_route']}，备降{diversion_info['diversion_airport']}。异常情况请询问相应专业人员。"
+
+    return notification
+
+
+def wrap_status_with_diversion(status_notifications, diversion_detected, diversion_flight_num, diversion_row, aircraft_num):
+    """
+    包装状态通知，如果有备降事件，在状态后添加备降警告
+
+    Args:
+        status_notifications: 原始状态通知列表
+        diversion_detected: 备降信息字典（如果检测到备降）
+        diversion_flight_num: 备降航班号
+        diversion_row: 备降航班数据行
+        aircraft_num: 飞机号
+
+    Returns:
+        list: 包装后的通知列表
+    """
+    if not diversion_detected:
+        return status_notifications
+
+    # 生成备降警告（简化版，放在状态后面）
+    detector = DiversionDetector()
+    diversion_type = detector.get_diversion_type_description(diversion_detected['diversion_type'])
+
+    diversion_warning = f"⚠️ 备降提醒：原计划{diversion_detected['original_route']}，实际执行{diversion_detected['actual_route']}，{diversion_type}。异常情况请询问相应专业人员。"
+
+    # 将备降警告放在状态通知后面
+    return status_notifications + [diversion_warning]
+
+
 def get_current_flight_status(df_aircraft, aircraft_num):
     """
     获取飞机当前正在执行的航班状态
@@ -153,7 +255,11 @@ def get_current_flight_status(df_aircraft, aircraft_num):
     ⚠️ 重要: 现在基于完整航线链判断状态
     - 只有完成航线链最后一个航班(VJ106/VJ108),才算完成当日所有航班
     - 中间航班完成后,会显示下一个计划航班
+    - 🆕 支持备降检测和通知
     """
+    # 初始化备降检测器
+    detector = DiversionDetector()
+
     # 获取完整的航线链序列
     flight_sequence = get_flight_sequence_sorted(df_aircraft)
 
@@ -166,10 +272,23 @@ def get_current_flight_status(df_aircraft, aircraft_num):
     last_completed_row = None
 
     # 遍历航线链,查找当前执行和已完成的航班
+    diversion_detected = None  # 记录是否检测到备降
+    diversion_flight_num = None
+    diversion_row = None
+
     for flight_num in flight_sequence:
         flight_rows = df_aircraft[df_aircraft['航班号'] == flight_num]
         if len(flight_rows) > 0:
             row = flight_rows.iloc[0]
+
+            # 🆕 检测备降
+            diversion = detector.check_diversion_from_row(row)
+            if diversion and diversion['is_diversion']:
+                # 记录备降信息，继续处理状态
+                diversion_detected = diversion
+                diversion_flight_num = flight_num
+                diversion_row = row
+
             completed = is_flight_completed(row)
 
             if completed:
@@ -195,51 +314,100 @@ def get_current_flight_status(df_aircraft, aircraft_num):
         if inn_val is not None:
             # 已落地
             airport = get_airport_name(current_row['着陆机场'])
-            route = get_flight_route(current_flight)
+            # 使用实际机场信息显示航线
+            route = get_flight_route(current_flight, current_row['起飞机场'], current_row['着陆机场'])
             route_str = f"（{route}）" if route else ""
             current_idx = flight_sequence.index(current_flight)
 
-            # 检查是否是航线链最后一个航班
+            # 生成状态通知
             if current_idx == len(flight_sequence) - 1:
                 # 最后一个航班落地,完成当日所有任务
-                return [f"{aircraft_num}停靠{airport}；已完成今日所有航班。"]
+                status_msg = f"{aircraft_num}停靠{airport}；已完成今日所有航班。"
             else:
                 # 还有后续航班
                 next_flight = flight_sequence[current_idx + 1]
-                return [f"{aircraft_num}停靠{airport}；计划执行{next_flight}。"]
+                status_msg = f"{aircraft_num}停靠{airport}；计划执行{next_flight}。"
+
+            # 🆕 包装备降信息（如果有）
+            return wrap_status_with_diversion(
+                [status_msg],
+                diversion_detected,
+                diversion_flight_num,
+                diversion_row,
+                aircraft_num
+            )
 
         elif on_val is not None:
             # 空中/落地但未滑入
             vn_time = parse_time_vietnam(on_val)
             time_str = f"越南时间{vn_time}" if vn_time else "越南时间未知"
             airport = get_airport_name(current_row['着陆机场'])
-            route = get_flight_route(current_flight)
+            # 使用实际机场信息显示航线
+            route = get_flight_route(current_flight, current_row['起飞机场'], current_row['着陆机场'])
             route_str = f"（{route}）" if route else ""
-            return [f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}在{airport}落地。"]
+            status_msg = f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}在{airport}落地。"
+
+            # 🆕 包装备降信息（如果有）
+            return wrap_status_with_diversion(
+                [status_msg],
+                diversion_detected,
+                diversion_flight_num,
+                diversion_row,
+                aircraft_num
+            )
 
         elif off_val is not None:
             # 已起飞
             vn_time = parse_time_vietnam(off_val)
             time_str = f"越南时间{vn_time}" if vn_time else "越南时间未知"
             airport = get_airport_name(current_row['起飞机场'])
-            route = get_flight_route(current_flight)
+            # 使用实际机场信息显示航线
+            route = get_flight_route(current_flight, current_row['起飞机场'], current_row['着陆机场'])
             route_str = f"（{route}）" if route else ""
-            return [f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}从{airport}起飞。"]
+            status_msg = f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}从{airport}起飞。"
+
+            # 🆕 包装备降信息（如果有）
+            return wrap_status_with_diversion(
+                [status_msg],
+                diversion_detected,
+                diversion_flight_num,
+                diversion_row,
+                aircraft_num
+            )
 
         elif out_val is not None:
             # 已滑出
             vn_time = parse_time_vietnam(out_val)
             time_str = f"越南时间{vn_time}" if vn_time else "越南时间未知"
             airport = get_airport_name(current_row['起飞机场'])
-            route = get_flight_route(current_flight)
+            # 使用实际机场信息显示航线
+            route = get_flight_route(current_flight, current_row['起飞机场'], current_row['着陆机场'])
             route_str = f"（{route}）" if route else ""
-            return [f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}滑出。"]
+            status_msg = f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}滑出。"
+
+            # 🆕 包装备降信息（如果有）
+            return wrap_status_with_diversion(
+                [status_msg],
+                diversion_detected,
+                diversion_flight_num,
+                diversion_row,
+                aircraft_num
+            )
 
         else:
             # 计划中
             route = get_flight_route(current_flight)
             route_str = f"（{route}）" if route else ""
-            return [f"{aircraft_num}计划执行{current_flight}{route_str}。"]
+            status_msg = f"{aircraft_num}计划执行{current_flight}{route_str}。"
+
+            # 🆕 包装备降信息（如果有）
+            return wrap_status_with_diversion(
+                [status_msg],
+                diversion_detected,
+                diversion_flight_num,
+                diversion_row,
+                aircraft_num
+            )
 
     # 情况2: 上一航班已完成,查看下一个航班
     elif last_completed_row is not None:
@@ -249,19 +417,43 @@ def get_current_flight_status(df_aircraft, aircraft_num):
         # 检查是否是航线链最后一个航班
         if last_idx == len(flight_sequence) - 1:
             # 最后一个航班已完成
-            return [f"{aircraft_num}停靠{airport}；已完成今日所有航班。"]
+            status_msg = f"{aircraft_num}停靠{airport}；已完成今日所有航班。"
         else:
             # 还有后续航班
             next_flight = flight_sequence[last_idx + 1]
-            return [f"{aircraft_num}停靠{airport}；计划执行{next_flight}。"]
+            status_msg = f"{aircraft_num}停靠{airport}；计划执行{next_flight}。"
+
+        # 🆕 包装备降信息（如果有）
+        return wrap_status_with_diversion(
+            [status_msg],
+            diversion_detected,
+            diversion_flight_num,
+            diversion_row,
+            aircraft_num
+        )
 
     # 情况3: 第一个航班还未开始
     elif current_flight is not None:
         route = get_flight_route(current_flight)
         route_str = f"（{route}）" if route else ""
-        return [f"{aircraft_num}计划执行{current_flight}{route_str}。"]
+        status_msg = f"{aircraft_num}计划执行{current_flight}{route_str}。"
 
-    return [f"{aircraft_num}暂无航班数据"]
+        # 🆕 包装备降信息（如果有）
+        return wrap_status_with_diversion(
+            [status_msg],
+            diversion_detected,
+            diversion_flight_num,
+            diversion_row,
+            aircraft_num
+        )
+
+    return wrap_status_with_diversion(
+        [f"{aircraft_num}暂无航班数据"],
+        diversion_detected,
+        diversion_flight_num,
+        diversion_row,
+        aircraft_num
+    )
 
 
 def monitor_flight_status(target_date=None):

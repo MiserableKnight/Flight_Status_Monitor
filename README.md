@@ -17,26 +17,10 @@
   - `main_scheduler.py` 不直接操作浏览器
   - 通过 subprocess.run() 执行 fetcher 脚本
 
-**数据抓取模块：**
-1. **fetchers/leg_fetcher.py** - 航段数据抓取（优化版）
-   - 目标页面: `lineLogController/index.html`
-   - 数据内容: 航段详细信息（起飞/着陆机场、时间、油量等）
-   - 保存文件: `data/daily_raw/leg_data_YYYY-MM-DD.csv`
-   - **核心优化策略**：
-     - **智能页面检测**: 优先检查是否已在目标页面
-     - **避免重复跳转**: 如果已在目标页面，跳过登录流程
-     - **首次运行**: 导航 → 设置机号 → 设置日期 → 点击查询
-     - **后续运行**: 只点击查询按钮（无需重复设置机号和日期）
-     - **快速刷新**: 每分钟只需2-3秒（无需页面跳转和表单填写）
-
-**数据处理模块：**
-2. **processors/leg_data_update.py** - 数据更新处理
-   - 合并每日数据到主表
-   - 标准化航班号格式
-   - 计算空中时间和空地时间
-3. **processors/leg_status_monitor.py** - 状态监控处理
-   - 对比新旧数据检测状态变化
-   - 发送状态变化邮件通知
+**架构设计：**
+- **fetchers/** - 数据抓取层，负责从网页获取原始数据
+- **processors/** - 数据处理层，负责数据更新和状态监控
+- **core/** - 核心系统层，提供通用功能模块
 
 ## 项目结构
 
@@ -76,13 +60,16 @@ Flight_Status_Monitor/
 │   ├── backup/                  # 历史备份
 │   └── leg_data.csv             # 航段数据汇总
 │
+├── docs/                        # 文档目录
+│   ├── SCHEDULER_GUIDE.md       # 调度模式使用指南
+│   └── TIMEZONE.md              # 时区策略说明
+│
 ├── logs/                        # 系统日志（保留24小时）
 │
 ├── main_scheduler.py            # 系统主调度器（使用 subprocess 调用脚本）
 ├── run_system.bat               # 一键启动脚本
 ├── requirements.txt             # 项目依赖（DrissionPage >= 4.0.0）
-├── README.md                    # 项目说明
-└── TIMEZONE.md                  # 时区策略说明
+└── README.md                    # 项目说明
 ```
 
 ## 快速开始
@@ -114,13 +101,13 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 在运行系统前，需要先启动Chrome浏览器的调试模式：
 
 ```bash
-chrome.exe --remote-debugging-port=9222 --user-data-dir="D:\Code\flight_data_daily_get\chrome_debug"
+chrome.exe --remote-debugging-port=9222 --user-data-dir="D:\Code\Flight_Status_Monitor\chrome_debug"
 ```
 
 或使用快捷方式，目标设置为：
 
 ```
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="D:\Code\flight_data_daily_get\chrome_debug"
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="D:\Code\Flight_Status_Monitor\chrome_debug"
 ```
 
 ### 4. 运行系统
@@ -145,44 +132,13 @@ chrome.exe --remote-debugging-port=9222 --user-data-dir="D:\Code\flight_data_dai
 
 #### 模式 1：调度模式（推荐用于生产环境）
 
-调度模式会根据 `config.ini` 中配置的时间自动执行数据监控任务：
+调度模式会根据 `config.ini` 中配置的时间自动执行数据监控任务。
 
-**工作流程：**
-1. 系统启动后进入等待状态，等待到配置的 `start_time`
-2. 连接到浏览器并导航到 `lineLogController/index.html`
-3. **首次运行**：设置机号和日期（只需一次）
-4. **后续运行**：停留在当前页面，每分钟点击"查询"按钮刷新数据
-5. 自动检测状态变化（起飞、降落、备降等异常）
-6. 检测到状态变化时自动发送邮件通知
-7. 到达 `end_time` 后自动停止
-
-**核心优势：**
-- 无需反复刷新页面或重新填写表单
-- 机号和日期只需设置一次
-- 每次刷新只需2-3秒，大幅提升效率
-
-**适用场景：**
-- 服务器环境长期运行
-- 需要实时监控航段状态变化
-- 无需人工干预的无人值守模式
-
-**示例调度时间配置：**
-```ini
-[scheduler]
-start_time = 06:30              # 早上6:30启动系统
-end_time = 21:00                # 晚上9:00停止运行
-```
+**更多详情请参考:** [docs/SCHEDULER_GUIDE.md](docs/SCHEDULER_GUIDE.md)
 
 #### 模式 2：交互模式（推荐用于测试和手动操作）
 
 交互模式允许您手动选择要执行的任务，适合测试和临时数据监控：
-
-**工作流程：**
-1. 系统进入交互式菜单
-2. 显示可用的操作选项
-3. 根据您的输入执行相应任务
-4. 可以连续执行多个任务
-5. 退出时停止系统
 
 **交互菜单示例：**
 ```
@@ -196,75 +152,6 @@ end_time = 21:00                # 晚上9:00停止运行
 ============================================================
 
 请选择操作 (1-2):
-```
-
-**操作说明：**
-
-- **输入 1** - 立即执行航段数据完整流程
-  - 连接到已打开的Chrome浏览器（端口9222）
-  - 自动导航到 `lineLogController/index.html`
-  - 选择配置的飞机号（通过序列号筛选）
-  - 设置日期为当天
-  - 点击查询并获取航段数据（起飞/着陆机场、时间、油量等）
-  - 保存至: `data/daily_raw/leg_data_YYYY-MM-DD.csv`
-  - 检测状态变化并自动发送邮件通知（如果配置了Gmail）
-
-- **输入 2** - 退出交互模式
-  - 关闭系统
-
-**适用场景：**
-- 测试系统配置是否正确
-- 临时需要手动抓取数据
-- 调试和问题排查
-- 不按固定时间运行的情况
-
-**使用示例：**
-```
-请选择操作 (1-4): 1
-============================================================
-🚀 开始执行任务: 航段数据抓取
-⏰ 时间: 2026-01-08 14:35:22
-============================================================
-🚀 开始抓取航段数据...
-🎯 目标日期：2026-01-08
-✅ 浏览器连接成功！
-
-🎯 步骤1: 导航到航段数据页面
-   ✅ 已在航段数据页面
-
-🎯 步骤2: 选择飞机
-   ✅ 找到'序列号:'标签
-   ✅ 找到序列号下拉框
-   🎯 开始选择目标飞机...
-   ✅ 选择飞机: B-652G
-   ✅ 选择飞机: B-656E
-   ✅ 成功选择 2 架飞机
-
-🎯 步骤3: 设置时间范围
-   ✅ 开始时间设置为: 2026-01-08
-   ✅ 结束时间设置为: 2026-01-08
-
-🎯 步骤4: 点击【查询】
-   ✅ 已点击查询按钮
-
-⏳ 等待表格加载...
-   ✅ 数据已加载 (2秒)
-
-🎯 步骤6: 提取并保存数据
-📊 开始提取表格数据...
-   ✅ 找到数据容器
-   ✅ 找到 4 行数据
-   ✅ 成功提取 4 行数据
-
-✅ 数据已保存到: data/daily_raw/leg_data_2026-01-08.csv
-🎉 数据抓取完成！
-📊 总行数: 5
-✅ 任务 航段数据抓取 执行成功
-
-请选择操作 (1-4): 4
-
-👋 退出系统
-📊 正在发送汇总报告...
 ```
 
 ## 功能特性
@@ -322,6 +209,15 @@ app_password = your_app_password
 recipients = recipient1@example.com, recipient2@example.com
 ```
 
+### 时区配置
+
+**项目时间统一使用北京时间**
+
+- **内部时间**: 统一使用北京时间 (UTC+8)
+- **邮件展示**: 转换为越南时间显示 (北京时间-1小时)
+
+**更多详情请参考:** [docs/TIMEZONE.md](docs/TIMEZONE.md)
+
 ## 常见问题
 
 ### Q1: 浏览器连接失败？
@@ -342,11 +238,29 @@ recipients = recipient1@example.com, recipient2@example.com
 
 ## 开发说明
 
+### 架构分层设计
+
+项目采用 fetchers/processors 分层架构：
+
+- **fetchers/** - 数据抓取层
+  - 负责与浏览器交互，从网页获取原始数据
+  - 数据保存到 `data/daily_raw/` 目录
+  - 每个脚本可独立运行，通过 `main()` 函数执行
+
+- **processors/** - 数据处理层
+  - 读取原始数据进行处理和分析
+  - 检测状态变化
+  - 触发邮件通知
+
+- **core/** - 核心系统层
+  - 提供浏览器管理、导航、日志等通用功能
+  - 被上层模块复用
+
 ### 添加新的数据抓取模块
 
-1. 在 `fetchers/` 目录下创建新的fetcher类
-2. 继承 `BaseFetcher` 并实现 `fetch()` 方法
-3. 在 `main_scheduler.py` 中集成新模块
+1. 在 `fetchers/` 目录下创建新的 fetcher 脚本
+2. 实现为独立可运行脚本，提供 `main()` 函数
+3. 在 `main_scheduler.py` 中通过 subprocess 调用
 
 ### 添加新的数据处理流程
 
@@ -360,10 +274,15 @@ recipients = recipient1@example.com, recipient2@example.com
 
 ## 版本历史
 
+- **v3.1.1** (2026-01-11)
+  - 添加 `docs/` 目录，整理项目文档
+  - 优化 README.md，添加文档链接
+
 - **v3.1** (2026-01-11)
   - 重构项目架构，采用 `fetchers/` 和 `processors/` 分层设计
   - 数据抓取和数据处理职责分离
   - 提升代码可维护性和可扩展性
+  - 优化航段数据抓取流程，减少重复操作
 
 - **v3.0** (2026-01-11)
   - 重构为专门的航段数据监控系统

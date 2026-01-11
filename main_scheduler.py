@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-航班数据抓取系统 - 主调度器
+航段数据监控系统 - 主调度器
 系统唯一入口，负责全天任务调度 (06:30 - 21:00)
 
 ⚠️ 重要技术说明：
@@ -10,8 +10,7 @@
 
 功能：
 - 定时执行航段数据抓取（leg_fetcher）
-- 定时执行故障数据抓取（faults_fetcher）
-- 定时执行飞行数据抓取（flight_fetcher，运力统计）
+- 智能检测航段状态变化（起飞/降落/备降等异常）
 - Gmail通知（可选）
 - 任务统计和报告
 """
@@ -56,17 +55,8 @@ class TaskScheduler:
         self.stats = {
             'leg_fetch_count': 0,
             'leg_success_count': 0,
-            'leg_failure_count': 0,
-            'faults_fetch_count': 0,
-            'faults_success_count': 0,
-            'faults_failure_count': 0,
-            'flight_fetch_count': 0,
-            'flight_success_count': 0,
-            'flight_failure_count': 0
+            'leg_failure_count': 0
         }
-
-        # 当前监控模式：'leg' 或 'faults'
-        self.current_monitor_mode = 'leg'
 
         self.log("系统初始化完成")
 
@@ -209,14 +199,6 @@ class TaskScheduler:
         """抓取航段数据"""
         return self.run_script('leg_fetcher', '航段数据抓取')
 
-    def fetch_flight_data(self):
-        """抓取飞行数据（运力统计）"""
-        return self.run_script('flight_fetcher', '飞行数据抓取')
-
-    def fetch_faults_data(self):
-        """抓取故障数据"""
-        return self.run_script('faults_fetcher', '故障数据抓取')
-
     def parse_time(self, time_str: str) -> datetime:
         """
         解析时间字符串为今天的datetime对象
@@ -261,11 +243,9 @@ class TaskScheduler:
         ⚠️ 注意：项目中所有时间统一使用北京时间
 
         监控策略:
-        1. 起飞前: 每分钟检查leg页面（等待滑出）
-        2. 起飞后: 切换到故障页面监控（每分钟）
-        3. 快落地时: 切回leg页面（计划到达时间）
-        4. 落地后: 继续监控leg页面直到滑入
-        5. 21:00: 抓取flight数据（运力统计）
+        1. 持续监控leg页面（每分钟检查）
+        2. 检测航段状态变化（起飞、降落、备降等异常）
+        3. 自动发送邮件通知
         """
         scheduler_config = self.config['scheduler']
 
@@ -283,10 +263,9 @@ class TaskScheduler:
             print(f"           航程 {info['duration_minutes']}分钟, 航线 {info['route']}")
 
         print(f"\n⏰ 运行时间: {scheduler_config['start_time']} - {scheduler_config['end_time']}")
-        print("🎯 监控模式: 智能航班生命周期监控")
-        print("   - 起飞前/落地后: 监控Leg数据页面")
-        print("   - 空中: 监控故障页面")
-        print("   - 21:00: 抓取Flight数据（运力统计）")
+        print("🎯 监控模式: 智能航段状态监控")
+        print("   - 持续监控Leg数据页面（每分钟）")
+        print("   - 自动检测状态变化并通知")
         print("="*60)
 
         # 等待到启动时间
@@ -294,13 +273,12 @@ class TaskScheduler:
         if start_time > now:
             self.wait_until_time(start_time)
 
-        # 主循环 - 智能航班生命周期监控
-        print("\n🚀 开始智能航班生命周期监控...")
+        # 主循环 - 智能航段状态监控
+        print("\n🚀 开始智能航段状态监控...")
         print(self.flight_tracker.get_status_summary())
 
         last_check_time = None
         check_interval = timedelta(minutes=1)  # 每分钟检查一次
-        flight_data_fetched_today = False
 
         while True:
             now = datetime.now()
@@ -309,16 +287,6 @@ class TaskScheduler:
             if now > end_time:
                 print("\n🌙 已到达结束时间，停止运行")
                 self.log("到达结束时间，停止运行")
-
-                # 结束前抓取flight数据（如果还没抓）
-                if not flight_data_fetched_today:
-                    print("\n📊 抓取今日Flight数据（运力统计）...")
-                    if self.fetch_flight_data():
-                        flight_data_fetched_today = True
-                        self.stats['flight_success_count'] += 1
-                    else:
-                        self.stats['flight_failure_count'] += 1
-
                 break
 
             # 每分钟检查一次
@@ -327,44 +295,16 @@ class TaskScheduler:
                 print(f"🔍 [{now.strftime('%H:%M:%S')}] 检查航班状态...")
                 print('='*60)
 
-                # 更新航班跟踪状态（读取最新leg数据）
-                # 注意: 这里需要从leg_data.csv读取最新状态
-                # 为了简化，我们在每次fetch_leg_data后自动更新tracker
+                # 监控Leg页面
+                print("📊 监控 Leg 数据（航段状态）...")
+                self.stats['leg_fetch_count'] += 1
 
-                # 决定应该监控哪个页面
-                should_monitor_leg = self.flight_tracker.should_monitor_leg_first(now)
-
-                if should_monitor_leg:
-                    # 监控Leg页面
-                    if self.current_monitor_mode != 'leg':
-                        print("🔄 切换到 Leg 数据页面监控")
-                        self.current_monitor_mode = 'leg'
-
-                    print("📊 监控 Leg 数据（航段状态）...")
-                    self.stats['leg_fetch_count'] += 1
-
-                    if self.fetch_and_update_leg_data():
-                        self.stats['leg_success_count'] += 1
-                        print("✅ Leg数据检查完成")
-                    else:
-                        self.stats['leg_failure_count'] += 1
-                        print("⚠️ Leg数据检查失败")
-
+                if self.fetch_and_update_leg_data():
+                    self.stats['leg_success_count'] += 1
+                    print("✅ Leg数据检查完成")
                 else:
-                    # 监控故障页面
-                    if self.current_monitor_mode != 'faults':
-                        print("🔄 切换到故障监控页面")
-                        self.current_monitor_mode = 'faults'
-
-                    print("🔧 监控故障数据...")
-                    self.stats['faults_fetch_count'] += 1
-
-                    if self.fetch_faults_data():
-                        self.stats['faults_success_count'] += 1
-                        print("✅ 故障数据检查完成")
-                    else:
-                        self.stats['faults_failure_count'] += 1
-                        print("⚠️ 故障数据检查失败")
+                    self.stats['leg_failure_count'] += 1
+                    print("⚠️ Leg数据检查失败")
 
                 # 显示当前状态摘要
                 print(self.flight_tracker.get_status_summary())
@@ -457,13 +397,11 @@ class TaskScheduler:
         print("   - 抓取最新数据")
         print("   - 检测状态变化并更新")
         print("   - 自动发送邮件通知")
-        print("2. 抓取故障数据（Faults Data）")
-        print("3. 抓取飞行数据（Flight Data - 运力统计）")
-        print("4. 退出")
+        print("2. 退出")
         print("="*60)
 
         while True:
-            choice = input("\n请选择操作 (1-4): ").strip()
+            choice = input("\n请选择操作 (1-2): ").strip()
 
             if choice == '1':
                 print("\n📋 执行航段数据完整流程...")
@@ -477,20 +415,6 @@ class TaskScheduler:
                     print("\n⚠️ 航段数据流程执行失败")
 
             elif choice == '2':
-                self.stats['faults_fetch_count'] += 1
-                if self.fetch_faults_data():
-                    self.stats['faults_success_count'] += 1
-                else:
-                    self.stats['faults_failure_count'] += 1
-
-            elif choice == '3':
-                self.stats['flight_fetch_count'] += 1
-                if self.fetch_flight_data():
-                    self.stats['flight_success_count'] += 1
-                else:
-                    self.stats['flight_failure_count'] += 1
-
-            elif choice == '4':
                 print("\n👋 退出系统")
                 # 汇总报告已禁用，仅保留航班状态变化通知
                 # 调度器统计数据通过日志文件记录
@@ -503,7 +427,7 @@ class TaskScheduler:
 def main():
     """主函数"""
     print("\n" + "="*60)
-    print("🛫 航班数据抓取系统")
+    print("🛫 航段数据监控系统")
     print("="*60)
     print(f"启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*60)

@@ -35,8 +35,7 @@ class LegFetcher(BaseFetcher):
         print("   ⏳ 等待页面元素加载...")
         time.sleep(3)
 
-        # 使用与 faults_fetcher.py 相同的成熟模式
-        # 方法1: 通过查找标签文本定位
+        # 通过查找标签文本定位下拉框
         label_ele = page.ele('tag:p@text()=序列号:')
         if label_ele:
             print("   ✅ 找到标签: 序列号")

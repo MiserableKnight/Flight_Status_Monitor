@@ -216,7 +216,7 @@ def generate_diversion_notification(aircraft_num, flight_num, diversion_info, ro
     detector = DiversionDetector()
     diversion_type = detector.get_diversion_type_description(diversion_info['diversion_type'])
 
-    notification = f"⚠️ {aircraft_num} 备降事件：{flight_num} {diversion_type}，原计划{diversion_info['original_route']}，实际执行{diversion_info['actual_route']}，备降{diversion_info['diversion_airport']}。异常情况请询问相应专业人员。"
+    notification = f"⚠️ {aircraft_num} 备降事件：{flight_num} {diversion_type}，原计划{diversion_info['original_route']}，实际执行{diversion_info['actual_route']}，备降{diversion_info['diversion_airport']}。具体情况请询问相应专业人员。"
 
     return notification
 
@@ -242,7 +242,7 @@ def wrap_status_with_diversion(status_notifications, diversion_detected, diversi
     detector = DiversionDetector()
     diversion_type = detector.get_diversion_type_description(diversion_detected['diversion_type'])
 
-    diversion_warning = f"⚠️ 备降提醒：原计划{diversion_detected['original_route']}，实际执行{diversion_detected['actual_route']}，{diversion_type}。异常情况请询问相应专业人员。"
+    diversion_warning = f"⚠️ 备降提醒：原计划{diversion_detected['original_route']}，实际执行{diversion_detected['actual_route']}，{diversion_type}。具体情况请询问相应专业人员。"
 
     # 将备降警告放在状态通知后面
     return status_notifications + [diversion_warning]

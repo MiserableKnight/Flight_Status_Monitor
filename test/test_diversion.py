@@ -130,7 +130,7 @@ def test_diversion_detector():
     for ex in diversion_examples:
         detector = DiversionDetector()
         diversion_type = detector.get_diversion_type_description(ex['info']['diversion_type'])
-        notification = f"⚠️ {ex['aircraft']} 备降事件：{ex['flight']} {diversion_type}，原计划{ex['info']['original_route']}，实际执行{ex['info']['actual_route']}，备降{ex['info']['diversion_airport']}。异常情况请询问相应专业人员。"
+        notification = f"⚠️ {ex['aircraft']} 备降事件：{ex['flight']} {diversion_type}，原计划{ex['info']['original_route']}，实际执行{ex['info']['actual_route']}，备降{ex['info']['diversion_airport']}。具体情况请询问相应专业人员。"
         print(notification)
         print()
 

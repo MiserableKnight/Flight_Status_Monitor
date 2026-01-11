@@ -22,7 +22,7 @@ sys.path.insert(0, project_root)
 
 from core.logger import get_logger
 from core.leg_status_notifier import LegStatusNotifier
-from core.diversion_detector import DiversionDetector
+from core.abnormal_detector import AbnormalDetector
 from config.config_loader import load_config
 from config.flight_schedule import FlightSchedule
 
@@ -200,52 +200,52 @@ def get_flight_sequence_sorted(df_aircraft):
         return [f['flight_number'] for f in flight_list]
 
 
-def generate_diversion_notification(aircraft_num, flight_num, diversion_info, row):
+def generate_abnormal_notification(aircraft_num, flight_num, abnormal_info, row):
     """
-    生成备降通知
+    生成异常通知
 
     Args:
         aircraft_num: 飞机号
         flight_num: 航班号
-        diversion_info: 备降信息字典
+        abnormal_info: 异常信息字典
         row: 航班数据行
 
     Returns:
-        str: 备降通知文本
+        str: 异常通知文本
     """
-    detector = DiversionDetector()
-    diversion_type = detector.get_diversion_type_description(diversion_info['diversion_type'])
+    detector = AbnormalDetector()
+    abnormal_type = detector.get_abnormal_type_description(abnormal_info['abnormal_type'])
 
-    notification = f"⚠️ {aircraft_num} 备降事件：{flight_num} {diversion_type}，原计划{diversion_info['original_route']}，实际执行{diversion_info['actual_route']}，备降{diversion_info['diversion_airport']}。具体情况请询问相应专业人员。"
+    notification = f"⚠️ {aircraft_num} 异常事件：{flight_num} {abnormal_type}，原计划{abnormal_info['original_route']}，实际执行{abnormal_info['actual_route']}，异常{abnormal_info['abnormal_airport']}。具体情况请询问相应专业人员。"
 
     return notification
 
 
-def wrap_status_with_diversion(status_notifications, diversion_detected, diversion_flight_num, diversion_row, aircraft_num):
+def wrap_status_with_abnormal(status_notifications, abnormal_detected, abnormal_flight_num, abnormal_row, aircraft_num):
     """
-    包装状态通知，如果有备降事件，在状态后添加备降警告
+    包装状态通知，如果有异常事件，在状态后添加异常警告
 
     Args:
         status_notifications: 原始状态通知列表
-        diversion_detected: 备降信息字典（如果检测到备降）
-        diversion_flight_num: 备降航班号
-        diversion_row: 备降航班数据行
+        abnormal_detected: 异常信息字典（如果检测到异常）
+        abnormal_flight_num: 异常航班号
+        abnormal_row: 异常航班数据行
         aircraft_num: 飞机号
 
     Returns:
         list: 包装后的通知列表
     """
-    if not diversion_detected:
+    if not abnormal_detected:
         return status_notifications
 
-    # 生成备降警告（简化版，放在状态后面）
-    detector = DiversionDetector()
-    diversion_type = detector.get_diversion_type_description(diversion_detected['diversion_type'])
+    # 生成异常警告（简化版，放在状态后面）
+    detector = AbnormalDetector()
+    abnormal_type = detector.get_abnormal_type_description(abnormal_detected['abnormal_type'])
 
-    diversion_warning = f"⚠️ 备降提醒：原计划{diversion_detected['original_route']}，实际执行{diversion_detected['actual_route']}，{diversion_type}。具体情况请询问相应专业人员。"
+    abnormal_warning = f"⚠️ 异常提醒：原计划{abnormal_detected['original_route']}，实际执行{abnormal_detected['actual_route']}，{abnormal_type}。具体情况请询问相应专业人员。"
 
-    # 将备降警告放在状态通知后面
-    return status_notifications + [diversion_warning]
+    # 将异常警告放在状态通知后面
+    return status_notifications + [abnormal_warning]
 
 
 def get_current_flight_status(df_aircraft, aircraft_num):
@@ -255,10 +255,10 @@ def get_current_flight_status(df_aircraft, aircraft_num):
     ⚠️ 重要: 现在基于完整航线链判断状态
     - 只有完成航线链最后一个航班(VJ106/VJ108),才算完成当日所有航班
     - 中间航班完成后,会显示下一个计划航班
-    - 🆕 支持备降检测和通知
+    - 🆕 支持异常检测和通知
     """
-    # 初始化备降检测器
-    detector = DiversionDetector()
+    # 初始化异常检测器
+    detector = AbnormalDetector()
 
     # 获取完整的航线链序列
     flight_sequence = get_flight_sequence_sorted(df_aircraft)
@@ -272,22 +272,22 @@ def get_current_flight_status(df_aircraft, aircraft_num):
     last_completed_row = None
 
     # 遍历航线链,查找当前执行和已完成的航班
-    diversion_detected = None  # 记录是否检测到备降
-    diversion_flight_num = None
-    diversion_row = None
+    abnormal_detected = None  # 记录是否检测到异常
+    abnormal_flight_num = None
+    abnormal_row = None
 
     for flight_num in flight_sequence:
         flight_rows = df_aircraft[df_aircraft['航班号'] == flight_num]
         if len(flight_rows) > 0:
             row = flight_rows.iloc[0]
 
-            # 🆕 检测备降
-            diversion = detector.check_diversion_from_row(row)
-            if diversion and diversion['is_diversion']:
-                # 记录备降信息，继续处理状态
-                diversion_detected = diversion
-                diversion_flight_num = flight_num
-                diversion_row = row
+            # 🆕 检测异常
+            abnormal = detector.check_abnormal_from_row(row)
+            if abnormal and abnormal['is_abnormal']:
+                # 记录异常信息，继续处理状态
+                abnormal_detected = abnormal
+                abnormal_flight_num = flight_num
+                abnormal_row = row
 
             completed = is_flight_completed(row)
 
@@ -328,12 +328,12 @@ def get_current_flight_status(df_aircraft, aircraft_num):
                 next_flight = flight_sequence[current_idx + 1]
                 status_msg = f"{aircraft_num}停靠{airport}；计划执行{next_flight}。"
 
-            # 🆕 包装备降信息（如果有）
-            return wrap_status_with_diversion(
+            # 🆕 包装异常信息（如果有）
+            return wrap_status_with_abnormal(
                 [status_msg],
-                diversion_detected,
-                diversion_flight_num,
-                diversion_row,
+                abnormal_detected,
+                abnormal_flight_num,
+                abnormal_row,
                 aircraft_num
             )
 
@@ -347,12 +347,12 @@ def get_current_flight_status(df_aircraft, aircraft_num):
             route_str = f"（{route}）" if route else ""
             status_msg = f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}在{airport}落地。"
 
-            # 🆕 包装备降信息（如果有）
-            return wrap_status_with_diversion(
+            # 🆕 包装异常信息（如果有）
+            return wrap_status_with_abnormal(
                 [status_msg],
-                diversion_detected,
-                diversion_flight_num,
-                diversion_row,
+                abnormal_detected,
+                abnormal_flight_num,
+                abnormal_row,
                 aircraft_num
             )
 
@@ -366,12 +366,12 @@ def get_current_flight_status(df_aircraft, aircraft_num):
             route_str = f"（{route}）" if route else ""
             status_msg = f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}从{airport}起飞。"
 
-            # 🆕 包装备降信息（如果有）
-            return wrap_status_with_diversion(
+            # 🆕 包装异常信息（如果有）
+            return wrap_status_with_abnormal(
                 [status_msg],
-                diversion_detected,
-                diversion_flight_num,
-                diversion_row,
+                abnormal_detected,
+                abnormal_flight_num,
+                abnormal_row,
                 aircraft_num
             )
 
@@ -385,12 +385,12 @@ def get_current_flight_status(df_aircraft, aircraft_num):
             route_str = f"（{route}）" if route else ""
             status_msg = f"{aircraft_num}执行{current_flight}{route_str}，已于{time_str}滑出。"
 
-            # 🆕 包装备降信息（如果有）
-            return wrap_status_with_diversion(
+            # 🆕 包装异常信息（如果有）
+            return wrap_status_with_abnormal(
                 [status_msg],
-                diversion_detected,
-                diversion_flight_num,
-                diversion_row,
+                abnormal_detected,
+                abnormal_flight_num,
+                abnormal_row,
                 aircraft_num
             )
 
@@ -400,12 +400,12 @@ def get_current_flight_status(df_aircraft, aircraft_num):
             route_str = f"（{route}）" if route else ""
             status_msg = f"{aircraft_num}计划执行{current_flight}{route_str}。"
 
-            # 🆕 包装备降信息（如果有）
-            return wrap_status_with_diversion(
+            # 🆕 包装异常信息（如果有）
+            return wrap_status_with_abnormal(
                 [status_msg],
-                diversion_detected,
-                diversion_flight_num,
-                diversion_row,
+                abnormal_detected,
+                abnormal_flight_num,
+                abnormal_row,
                 aircraft_num
             )
 
@@ -423,12 +423,12 @@ def get_current_flight_status(df_aircraft, aircraft_num):
             next_flight = flight_sequence[last_idx + 1]
             status_msg = f"{aircraft_num}停靠{airport}；计划执行{next_flight}。"
 
-        # 🆕 包装备降信息（如果有）
-        return wrap_status_with_diversion(
+        # 🆕 包装异常信息（如果有）
+        return wrap_status_with_abnormal(
             [status_msg],
-            diversion_detected,
-            diversion_flight_num,
-            diversion_row,
+            abnormal_detected,
+            abnormal_flight_num,
+            abnormal_row,
             aircraft_num
         )
 
@@ -438,20 +438,20 @@ def get_current_flight_status(df_aircraft, aircraft_num):
         route_str = f"（{route}）" if route else ""
         status_msg = f"{aircraft_num}计划执行{current_flight}{route_str}。"
 
-        # 🆕 包装备降信息（如果有）
-        return wrap_status_with_diversion(
+        # 🆕 包装异常信息（如果有）
+        return wrap_status_with_abnormal(
             [status_msg],
-            diversion_detected,
-            diversion_flight_num,
-            diversion_row,
+            abnormal_detected,
+            abnormal_flight_num,
+            abnormal_row,
             aircraft_num
         )
 
-    return wrap_status_with_diversion(
+    return wrap_status_with_abnormal(
         [f"{aircraft_num}暂无航班数据"],
-        diversion_detected,
-        diversion_flight_num,
-        diversion_row,
+        abnormal_detected,
+        abnormal_flight_num,
+        abnormal_row,
         aircraft_num
     )
 

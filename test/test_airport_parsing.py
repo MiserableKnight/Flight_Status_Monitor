@@ -6,7 +6,7 @@ import sys
 import os
 
 # 添加项目根目录到路径
-project_root = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 from leg_status_monitor import get_airport_name
@@ -23,7 +23,7 @@ def test_airport_parsing():
         ('VVNB-内排国际机场', '河内'),
         ('VVTS-新山一国际机场', '胡志明'),
 
-        # 备降机场（动态解析）
+        # 异常机场（动态解析）
         ('VVCI-海防吉碑国际', '海防吉碑'),
         ('VVCT-芹苴国际机场', '芹苴'),
 

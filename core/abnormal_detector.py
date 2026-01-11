@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-航班备降检测模块
+航班异常检测模块
 
 功能：
-- 动态检测航班备降事件
+- 动态检测航班异常事件
 - 基于航班计划配置检测异常
 - 支持未知航班、航线异常、起降机场相同等情况
 """
@@ -12,8 +12,8 @@ from typing import Dict, List, Optional, Tuple
 from config.flight_schedule import FlightSchedule
 
 
-class DiversionDetector:
-    """动态备降检测器"""
+class AbnormalDetector:
+    """动态异常检测器"""
 
     # 机场名称映射（用于简化显示）
     AIRPORT_MAPPING = {
@@ -23,7 +23,7 @@ class DiversionDetector:
     }
 
     def __init__(self):
-        """初始化备降检测器"""
+        """初始化异常检测器"""
         # 从 FlightSchedule 加载正常航班配置
         self.normal_flights = FlightSchedule.FLIGHT_SCHEDULES
         self.normal_flight_numbers = set(self.normal_flights.keys())
@@ -81,14 +81,14 @@ class DiversionDetector:
         # 如果没有 '-'，直接返回
         return airport_str
 
-    def detect_diversion(
+    def detect_abnormal(
         self,
         flight_number: str,
         departure_airport: str,
         arrival_airport: str
     ) -> Optional[Dict]:
         """
-        检测是否备降
+        检测是否异常
 
         Args:
             flight_number: 航班号
@@ -96,13 +96,13 @@ class DiversionDetector:
             arrival_airport: 着陆机场（全名）
 
         Returns:
-            dict: 备降信息字典，如果不是备降则返回 None
+            dict: 异常信息字典，如果不是异常则返回 None
             {
-                'is_diversion': bool,
-                'diversion_type': str,  # 'unknown_flight', 'route_mismatch', 'same_airport'
+                'is_abnormal': bool,
+                'abnormal_type': str,  # 'unknown_flight', 'route_mismatch', 'same_airport'
                 'original_route': str,   # 原计划航线
                 'actual_route': str,     # 实际执行航线
-                'diversion_airport': str # 备降机场
+                'abnormal_airport': str # 异常机场
             }
         """
         # 处理空值
@@ -115,24 +115,24 @@ class DiversionDetector:
             arr_short = self.get_airport_short(arrival_airport)
 
             return {
-                'is_diversion': True,
-                'diversion_type': 'unknown_flight',
+                'is_abnormal': True,
+                'abnormal_type': 'unknown_flight',
                 'original_route': '未知',  # 未知航班没有原计划
                 'actual_route': f'{dep_short}-{arr_short}',
-                'diversion_airport': arr_short
+                'abnormal_airport': arr_short
             }
 
-        # 情况2: 起降机场相同（明确备降）
+        # 情况2: 起降机场相同（明确异常）
         if departure_airport == arrival_airport:
             original_info = self.normal_flights[flight_number]
             dep_short = self.get_airport_short(departure_airport)
 
             return {
-                'is_diversion': True,
-                'diversion_type': 'same_airport',
+                'is_abnormal': True,
+                'abnormal_type': 'same_airport',
                 'original_route': original_info['route'],
                 'actual_route': f'{dep_short}-{dep_short}',
-                'diversion_airport': dep_short
+                'abnormal_airport': dep_short
             }
 
         # 情况3: 城市对不匹配
@@ -145,38 +145,38 @@ class DiversionDetector:
             arr_short = self.get_airport_short(arrival_airport)
 
             return {
-                'is_diversion': True,
-                'diversion_type': 'route_mismatch',
+                'is_abnormal': True,
+                'abnormal_type': 'route_mismatch',
                 'original_route': original_info['route'],
                 'actual_route': f'{dep_short}-{arr_short}',
-                'diversion_airport': arr_short
+                'abnormal_airport': arr_short
             }
 
         # 正常情况
         return None
 
-    def check_diversion_from_row(self, row: pd.Series) -> Optional[Dict]:
+    def check_abnormal_from_row(self, row: pd.Series) -> Optional[Dict]:
         """
-        从数据行检测备降
+        从数据行检测异常
 
         Args:
             row: 包含航班信息的数据行
 
         Returns:
-            dict: 备降信息或 None
+            dict: 异常信息或 None
         """
         flight_number = row.get('航班号', '')
         departure_airport = row.get('起飞机场', '')
         arrival_airport = row.get('着陆机场', '')
 
-        return self.detect_diversion(flight_number, departure_airport, arrival_airport)
+        return self.detect_abnormal(flight_number, departure_airport, arrival_airport)
 
-    def get_diversion_type_description(self, diversion_type: str) -> str:
+    def get_abnormal_type_description(self, abnormal_type: str) -> str:
         """
-        获取备降类型的中文名称
+        获取异常类型的中文名称
 
         Args:
-            diversion_type: 备降类型代码
+            abnormal_type: 异常类型代码
 
         Returns:
             str: 中文名称
@@ -186,59 +186,59 @@ class DiversionDetector:
             'route_mismatch': '航线异常',
             'same_airport': '起降机场相同'
         }
-        return type_map.get(diversion_type, '未知异常')
+        return type_map.get(abnormal_type, '未知异常')
 
 
 if __name__ == "__main__":
     # 测试代码
-    print("🧪 备降检测器测试")
+    print("🧪 异常检测器测试")
     print("="*60)
 
-    detector = DiversionDetector()
+    detector = AbnormalDetector()
 
     # 测试1: 正常航班
     print("\n✅ 测试1: 正常航班 VJ105 (河内->昆岛)")
-    result = detector.detect_diversion(
+    result = detector.detect_abnormal(
         'VJ105',
         'VVNB-内排国际机场',
         'VVCS-昆仑国际机场'
     )
-    print(f"结果: {result if result else '正常，无备降'}")
+    print(f"结果: {result if result else '正常，无异常'}")
 
-    # 测试2: 备降海防
-    print("\n⚠️ 测试2: VJ105备降海防")
-    result = detector.detect_diversion(
+    # 测试2: 异常海防
+    print("\n⚠️ 测试2: VJ105异常海防")
+    result = detector.detect_abnormal(
         'VJ105',
         'VVNB-内排国际机场',
         'VVCI-海防吉碑国际'
     )
     if result:
-        print(f"检测到备降: {detector.get_diversion_type_description(result['diversion_type'])}")
+        print(f"检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
         print(f"原计划: {result['original_route']}")
         print(f"实际执行: {result['actual_route']}")
-        print(f"备降机场: {result['diversion_airport']}")
+        print(f"异常机场: {result['abnormal_airport']}")
 
     # 测试3: 起降机场相同
     print("\n⚠️ 测试3: VJ112起降机场相同（胡志明-胡志明）")
-    result = detector.detect_diversion(
+    result = detector.detect_abnormal(
         'VJ112',
         'VVTS-新山一国际机场',
         'VVTS-新山一国际机场'
     )
     if result:
-        print(f"检测到备降: {detector.get_diversion_type_description(result['diversion_type'])}")
+        print(f"检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
         print(f"原计划: {result['original_route']}")
         print(f"实际执行: {result['actual_route']}")
-        print(f"备降机场: {result['diversion_airport']}")
+        print(f"异常机场: {result['abnormal_airport']}")
 
     # 测试4: 未知航班
     print("\n⚠️ 测试4: 未知航班号 VJ999")
-    result = detector.detect_diversion(
+    result = detector.detect_abnormal(
         'VJ999',
         'VVNB-内排国际机场',
         'VVCI-海防吉碑国际'
     )
     if result:
-        print(f"检测到备降: {detector.get_diversion_type_description(result['diversion_type'])}")
+        print(f"检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
         print(f"实际执行: {result['actual_route']}")
-        print(f"备降机场: {result['diversion_airport']}")
+        print(f"异常机场: {result['abnormal_airport']}")

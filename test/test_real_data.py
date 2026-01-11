@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-使用真实数据测试备降检测和邮件通知
+使用真实数据测试异常检测和邮件通知
 """
 import sys
 import os
 import pandas as pd
 
 # 添加项目根目录到路径
-project_root = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 from leg_status_monitor import get_current_flight_status
@@ -16,7 +16,7 @@ from config.config_loader import load_config
 
 def test_with_real_data():
     """使用真实数据测试"""
-    print("📊 使用真实数据测试备降检测")
+    print("📊 使用真实数据测试异常检测")
     print("="*60)
 
     # 读取真实数据

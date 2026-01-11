@@ -65,7 +65,7 @@ class TaskScheduler:
         运行数据抓取脚本
 
         Args:
-            script_name: 脚本模块名 (如 'modules.leg_fetcher')
+            script_name: 脚本模块名 (如 'fetchers/leg_fetcher')
             task_name: 任务名称（用于日志）
 
         Returns:
@@ -80,7 +80,7 @@ class TaskScheduler:
 
         try:
             # 使用 subprocess 运行脚本
-            script_path = os.path.join(project_root, 'modules', f"{script_name}.py")
+            script_path = os.path.join(project_root, 'fetchers', f"{script_name}.py")
 
             if not os.path.exists(script_path):
                 raise Exception(f"脚本不存在: {script_path}")
@@ -157,7 +157,7 @@ class TaskScheduler:
         self.log(f"开始执行任务: {task_name}")
 
         try:
-            script_path = os.path.join(project_root, f"{script_name}.py")
+            script_path = os.path.join(project_root, 'processors', f"{script_name}.py")
 
             if not os.path.exists(script_path):
                 raise Exception(f"脚本不存在: {script_path}")

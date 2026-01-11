@@ -15,7 +15,7 @@ import sys
 import subprocess
 
 # 添加项目根目录到路径
-project_root = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 from core.logger import get_logger
@@ -205,7 +205,7 @@ def update_leg_data(target_date=None):
     # 触发状态监控
     print(f"\n📧 触发状态监控...")
     try:
-        monitor_script = os.path.join(project_root, 'leg_status_monitor.py')
+        monitor_script = os.path.join(project_root, 'processors', 'leg_status_monitor.py')
         result = subprocess.run(
             [sys.executable, monitor_script, target_date_str],
             capture_output=True,

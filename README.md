@@ -18,22 +18,32 @@
   - 通过 subprocess.run() 执行 fetcher 脚本
 
 **数据抓取模块：**
-1. **leg_fetcher.py** - 航段数据抓取
+1. **fetchers/leg_fetcher.py** - 航段数据抓取
    - 目标页面: `lineLogController/index.html`
    - 数据内容: 航段详细信息（起飞/着陆机场、时间、油量等）
    - 保存文件: `data/daily_raw/leg_data_YYYY-MM-DD.csv`
 
+**数据处理模块：**
+2. **processors/leg_data_update.py** - 数据更新处理
+   - 合并每日数据到主表
+   - 标准化航班号格式
+   - 计算空中时间和空地时间
+3. **processors/leg_status_monitor.py** - 状态监控处理
+   - 对比新旧数据检测状态变化
+   - 发送状态变化邮件通知
+
 ## 项目结构
 
 ```
-flight_data_daily_get/
+Flight_Status_Monitor/
 ├── config/                      # 配置目录
 │   ├── __init__.py
 │   ├── config.ini               # 核心配置文件（使用 config.ini.example 作为模板）
 │   ├── config_loader.py         # 配置加载器
-│   └── aircraft_cfg.py          # 飞机号映射配置
+│   ├── aircraft_cfg.py          # 飞机号映射配置
+│   └── flight_schedule.py       # 航班计划配置
 │
-├── core/                        # 核心系统模块（基于 DrissionPage）
+├── core/                        # 核心系统模块
 │   ├── __init__.py
 │   ├── browser_handler.py       # 浏览器管理（ChromiumPage）
 │   ├── navigator.py             # 智能导航系统
@@ -43,11 +53,17 @@ flight_data_daily_get/
 │   ├── abnormal_detector.py     # 异常检测器（备降检测）
 │   └── leg_status_notifier.py   # 航段状态通知器
 │
-├── modules/                     # 业务逻辑模块（独立函数式脚本）
+├── fetchers/                    # 数据抓取器
 │   ├── __init__.py
+│   ├── base_fetcher.py          # 抓取器基类
 │   ├── login_manager.py         # 登录管理
 │   ├── leg_fetcher.py           # 航段数据抓取
-│   └── data_processor.py        # 数据处理
+│   └── data_processor.py        # 数据处理器
+│
+├── processors/                  # 数据处理器
+│   ├── __init__.py
+│   ├── leg_data_update.py       # 数据更新处理
+│   └── leg_status_monitor.py    # 状态监控处理
 │
 ├── data/                        # 数据存储目录
 │   ├── daily_raw/               # 每日原始数据
@@ -59,7 +75,8 @@ flight_data_daily_get/
 ├── main_scheduler.py            # 系统主调度器（使用 subprocess 调用脚本）
 ├── run_system.bat               # 一键启动脚本
 ├── requirements.txt             # 项目依赖（DrissionPage >= 4.0.0）
-└── README.md                    # 项目说明
+├── README.md                    # 项目说明
+└── TIMEZONE.md                  # 时区策略说明
 ```
 
 ## 快速开始
@@ -314,15 +331,26 @@ recipients = recipient1@example.com, recipient2@example.com
 
 ### 添加新的数据抓取模块
 
-1. 在 `modules/` 目录下创建新的fetcher类
-2. 继承基类并实现 `fetch()` 方法
+1. 在 `fetchers/` 目录下创建新的fetcher类
+2. 继承 `BaseFetcher` 并实现 `fetch()` 方法
 3. 在 `main_scheduler.py` 中集成新模块
+
+### 添加新的数据处理流程
+
+1. 在 `processors/` 目录下创建新的处理脚本
+2. 实现数据处理逻辑
+3. 在 `main_scheduler.py` 中调用新处理器
 
 ### 扩展通知方式
 
 在 `core/notifier.py` 中添加新的通知类（如微信、钉钉等）。
 
 ## 版本历史
+
+- **v3.1** (2026-01-11)
+  - 重构项目架构，采用 `fetchers/` 和 `processors/` 分层设计
+  - 数据抓取和数据处理职责分离
+  - 提升代码可维护性和可扩展性
 
 - **v3.0** (2026-01-11)
   - 重构为专门的航段数据监控系统

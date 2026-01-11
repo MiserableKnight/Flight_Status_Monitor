@@ -364,9 +364,6 @@ class TaskScheduler:
                     df = pd.read_csv(leg_data_file)
                     today = datetime.now().strftime('%Y-%m-%d')
 
-                    # 调试信息：检查列名
-                    self.log(f"CSV列名: {df.columns.tolist()}", "INFO")
-
                     # 只读取今天的最新数据（CSV列名是中文'日期'）
                     if '日期' in df.columns:
                         today_data = df[df['日期'] == today].to_dict('records')

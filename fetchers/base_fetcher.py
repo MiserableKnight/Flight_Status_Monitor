@@ -118,6 +118,11 @@ class BaseFetcher(ABC):
         """
         智能登录系统 - 自动检测并处理各种页面状态
 
+        核心优化:
+        1. 优先检查是否已在目标页面（lineLogController/index.html）
+        2. 如果已在目标页面，直接返回，不做任何跳转
+        3. 只在必要时才执行登录和跳转逻辑
+
         :param page: ChromiumPage 对象
         :return: 成功返回 True,失败返回 False
         """
@@ -125,6 +130,21 @@ class BaseFetcher(ABC):
         current_url = page.url
         print(f"📍 当前URL: {current_url}")
 
+        # ========== 优先级1: 检查是否已在目标页面 ==========
+        # 核心优化: 如果已在航段数据页面，直接返回，不做任何跳转
+        if "lineLogController/index.html" in current_url:
+            print("✅ 已在目标页面: lineLogController/index.html")
+            print("💡 跳过登录流程，保持当前状态")
+            self.log("Already at target page, skipping login", "INFO")
+            return True
+
+        # ========== 优先级2: 检查是否在系统首页 ==========
+        if "mainController/index.html" in current_url:
+            print("✅ 已在系统首页: mainController/index.html")
+            self.log("Already at main page", "INFO")
+            return True
+
+        # ========== 优先级3: 处理登录流程 ==========
         # 如果在新标签页,导航到登录页
         if "chrome://" in current_url or current_url == "about:blank" or "newtab" in current_url:
             print("🌐 检测到空白页,导航到登录页面...")
@@ -132,12 +152,20 @@ class BaseFetcher(ABC):
             time.sleep(2)
             current_url = page.url
 
-        # 如果不是空白页也不是登录页,直接跳转到首页
+        # 判断页面状态
         is_blank_page = "chrome://" in current_url or current_url == "about:blank" or "newtab" in current_url
         is_login_page = ("portal" in current_url and "login" in current_url) or "rbacUsersController/login.html" in current_url
+        is_in_system = ("cis.comac.cc:8004" in current_url or "cis.comac.cc:8010" in current_url)
 
+        # 如果已在系统内但不在首页，也认为就绪（由子类决定是否需要导航）
+        if is_in_system:
+            print(f"✅ 已在系统内")
+            self.log("Already in system", "INFO")
+            return True
+
+        # 如果不在登录流程中，导航到首页
         if not is_blank_page and not is_login_page:
-            print("🚀 不在登录流程中,直接跳转到系统首页...")
+            print("🚀 不在登录流程中,导航到系统首页...")
             page.get("https://cis.comac.cc:8004/caphm/mainController/index.html")
             time.sleep(2)
             current_url = page.url

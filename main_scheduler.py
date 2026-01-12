@@ -1,23 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-航段数据监控系统 - 主调度器
-系统唯一入口，负责全天任务调度 (06:30 - 21:00)
+统一调度器 - 单进程模式
 
-⚠️ 重要技术说明：
-- 本项目使用 DrissionPage 作为浏览器自动化框架（不是 Playwright！）
-- 所有 fetcher 模块都是独立的函数式脚本，通过调用其 main() 函数执行
-- BrowserHandler 使用 DrissionPage 的 ChromiumPage 和 ChromiumOptions
-
-功能：
-- 定时执行航段数据抓取（leg_fetcher）
-- 智能检测航段状态变化（起飞/降落/备降等异常）
-- Gmail通知（可选）
-- 任务统计和报告
+核心改进：
+- 废弃多进程模式，所有 Fetcher 在同一进程内运行
+- 避免跨进程竞争条件和资源冲突
+- 更稳定的标签页管理和浏览器连接
 """
 import sys
 import os
 import time
-import subprocess
 from datetime import datetime, timedelta
 from typing import List, Dict
 
@@ -30,10 +22,12 @@ from config.flight_schedule import FlightSchedule
 from core.logger import get_logger
 from core.notifier import GmailNotifier
 from core.flight_tracker import FlightTracker
+from fetchers.leg_fetcher import LegFetcher
+from fetchers.fault_fetcher import FaultFetcher
 
 
-class TaskScheduler:
-    """任务调度器类"""
+class UnifiedScheduler:
+    """统一调度器类（单进程模式）"""
 
     def __init__(self):
         """初始化调度器"""
@@ -48,205 +42,222 @@ class TaskScheduler:
         gmail_config = self.config.get('gmail', {})
         self.notifier = GmailNotifier(config=gmail_config) if gmail_config else None
 
-        # 初始化航班状态跟踪器（传入配置的飞机列表）
+        # 初始化航班状态跟踪器
         aircraft_list = self.config.get('aircraft_list', [])
         self.flight_tracker = FlightTracker(monitored_aircraft=aircraft_list)
+
+        # ========== 核心改进：在同一进程内创建所有 Fetcher ==========
+        print("\n" + "="*60)
+        print("🔧 初始化统一调度器（单进程模式）")
+        print("="*60)
+
+        # 创建 Fetcher 实例（共享同一个浏览器连接）
+        self.leg_fetcher = LegFetcher()
+        self.fault_fetcher = FaultFetcher()
+
+        print("✅ LegFetcher 已创建")
+        print("✅ FaultFetcher 已创建")
+        print("💡 所有 Fetcher 将在同一进程内运行")
+        print("="*60)
 
         # 统计数据
         self.stats = {
             'leg_fetch_count': 0,
             'leg_success_count': 0,
-            'leg_failure_count': 0
+            'leg_failure_count': 0,
+            'fault_check_count': 0,
+            'fault_success_count': 0,
+            'fault_failure_count': 0,
         }
 
-        self.log("系统初始化完成")
+        self.log("统一调度器初始化完成")
 
-    def run_script(self, script_name: str, task_name: str) -> bool:
+    def connect_all_fetchers(self):
         """
-        运行数据抓取脚本
+        连接所有 Fetcher 到浏览器
 
-        Args:
-            script_name: 脚本模块名 (如 'fetchers/leg_fetcher')
-            task_name: 任务名称（用于日志）
+        核心改进：
+        - 确保所有 Fetcher 共享同一个浏览器连接
+        - 为每个 Fetcher 分配独立的标签页
+        - 基于 URL 匹配的标签页管理
 
         Returns:
             bool: 是否成功
         """
-        print(f"\n{'='*60}")
-        print(f"🚀 开始执行任务: {task_name}")
-        print(f"⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print('='*60)
-
-        self.log(f"开始执行任务: {task_name}")
+        print("\n" + "="*60)
+        print("🌐 连接浏览器并分配标签页")
+        print("="*60)
 
         try:
-            # 使用 subprocess 运行脚本
-            script_path = os.path.join(project_root, 'fetchers', f"{script_name}.py")
-
-            if not os.path.exists(script_path):
-                raise Exception(f"脚本不存在: {script_path}")
-
-            # 运行脚本
-            result = subprocess.run(
-                [sys.executable, script_path],
-                capture_output=True,
-                text=True,
-                timeout=300  # 5分钟超时
-            )
-
-            # 打印输出
-            if result.stdout:
-                print(result.stdout)
-
-            if result.returncode == 0:
-                print(f"✅ 任务 {task_name} 执行成功")
-                self.log(f"任务成功: {task_name}", "SUCCESS")
-
-                # 任务成功/失败通知已禁用，仅保留航班状态变化通知
-                # 调度器任务结果通过日志文件记录
-
-                return True
-            else:
-                print(f"❌ 任务 {task_name} 执行失败")
-                if result.stderr:
-                    print(result.stderr)
-                self.log(f"任务失败: {task_name}", "ERROR")
-
-                # 任务成功/失败通知已禁用，仅保留航班状态变化通知
-                # 调度器任务结果通过日志文件记录
-
+            # 步骤1：连接 LegFetcher
+            print("\n📍 步骤1: 连接 LegFetcher...")
+            self.leg_page = self.leg_fetcher.connect_browser()
+            if not self.leg_page:
+                print("❌ LegFetcher 连接失败")
                 return False
+            print("✅ LegFetcher 已连接")
 
-        except subprocess.TimeoutExpired:
-            error_msg = f"任务执行超时（300秒）"
-            print(f"❌ {error_msg}")
-            self.log(f"任务超时: {task_name}", "ERROR")
+            # 步骤2：连接 FaultFetcher
+            print("\n📍 步骤2: 连接 FaultFetcher...")
+            self.fault_page = self.fault_fetcher.connect_browser()
+            if not self.fault_page:
+                print("❌ FaultFetcher 连接失败")
+                return False
+            print("✅ FaultFetcher 已连接")
 
-            # 任务成功/失败通知已禁用，仅保留航班状态变化通知
-            # 调度器任务结果通过日志文件记录
-
-            return False
+            print("\n" + "="*60)
+            print("✅ 所有 Fetcher 已成功连接")
+            print("="*60)
+            return True
 
         except Exception as e:
-            print(f"❌ 任务执行出错: {e}")
-            self.log(f"任务出错: {task_name} - {e}", "ERROR")
-
-            # 任务成功/失败通知已禁用，仅保留航班状态变化通知
-            # 调度器任务结果通过日志文件记录
-
+            print(f"❌ 连接失败: {e}")
+            self.log(f"连接浏览器失败: {e}", "ERROR")
             return False
 
-    def run_update_script(self, script_name: str, task_name: str, date_arg: str = None) -> bool:
+    def login_all_fetchers(self):
         """
-        运行数据更新/监控脚本
+        为所有 Fetcher 执行登录
 
-        Args:
-            script_name: 脚本文件名 (如 'leg_data_update')
-            task_name: 任务名称（用于日志）
-            date_arg: 可选的日期参数
+        核心改进：
+        - 共享登录状态（Cookie共享）
+        - 只需第一个 Fetcher 执行完整登录
+        - 后续 Fetcher 直接跳转即可
 
         Returns:
             bool: 是否成功
         """
-        print(f"\n{'='*60}")
-        print(f"🔄 开始执行任务: {task_name}")
-        if date_arg:
-            print(f"📅 日期: {date_arg}")
-        print(f"⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print('='*60)
-
-        self.log(f"开始执行任务: {task_name}")
+        print("\n" + "="*60)
+        print("🔑 执行智能登录")
+        print("="*60)
 
         try:
-            script_path = os.path.join(project_root, 'processors', f"{script_name}.py")
-
-            if not os.path.exists(script_path):
-                raise Exception(f"脚本不存在: {script_path}")
-
-            # 构建命令参数
-            cmd = [sys.executable, script_path]
-            if date_arg:
-                cmd.append(date_arg)
-
-            # 运行脚本
-            result = subprocess.run(
-                cmd,
-                capture_output=False,  # 实时输出
-                text=True,
-                timeout=120  # 2分钟超时
-            )
-
-            if result.returncode == 0:
-                print(f"✅ 任务 {task_name} 执行成功")
-                self.log(f"任务成功: {task_name}", "SUCCESS")
-                return True
-            else:
-                print(f"❌ 任务 {task_name} 执行失败")
-                self.log(f"任务失败: {task_name}", "ERROR")
+            # 只需对 LegFetcher 执行登录（Cookie 会自动共享）
+            print("\n📍 步骤1: LegFetcher 登录...")
+            if not self.leg_fetcher.smart_login(self.leg_page):
+                print("❌ LegFetcher 登录失败")
                 return False
+            print("✅ LegFetcher 登录成功")
 
-        except subprocess.TimeoutExpired:
-            error_msg = f"任务执行超时（120秒）"
-            print(f"❌ {error_msg}")
-            self.log(f"任务超时: {task_name}", "ERROR")
-            return False
+            # FaultFetcher 可以直接跳转（无需重新登录）
+            print("\n📍 步骤2: FaultFetcher 使用共享登录状态...")
+            print("💡 Cookie 已自动共享，无需重新登录")
+            print("✅ FaultFetcher 准备就绪")
+
+            print("\n" + "="*60)
+            print("✅ 所有 Fetcher 登录完成")
+            print("="*60)
+            return True
 
         except Exception as e:
-            print(f"❌ 任务执行出错: {e}")
-            self.log(f"任务出错: {task_name} - {e}", "ERROR")
+            print(f"❌ 登录失败: {e}")
+            self.log(f"登录失败: {e}", "ERROR")
             return False
 
     def fetch_leg_data(self):
-        """抓取航段数据"""
-        return self.run_script('leg_fetcher', '航段数据抓取')
-
-    def parse_time(self, time_str: str) -> datetime:
         """
-        解析时间字符串为今天的datetime对象
-
-        Args:
-            time_str: 时间字符串 (HH:MM)
+        抓取航段数据（在同一进程内）
 
         Returns:
-            datetime: datetime对象
+            bool: 是否成功
         """
+        print(f"\n{'='*60}")
+        print(f"🚀 执行任务: 航段数据抓取")
+        print(f"⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print('='*60)
+
+        self.log("开始抓取航段数据")
+
+        try:
+            # 确保在正确的标签页上操作
+            if not self.leg_fetcher.ensure_assigned_tab(self.leg_page):
+                print("⚠️  标签页切换失败")
+                return False
+
+            # 执行抓取
+            target_date = datetime.now().strftime('%Y-%m-%d')
+            data = self.leg_fetcher.navigate_to_target_page(self.leg_page, target_date)
+
+            if data:
+                # 保存数据
+                csv_file = self.leg_fetcher.save_to_csv(
+                    data,
+                    filename=f"leg_data_{target_date}.csv"
+                )
+
+                if csv_file:
+                    print(f"✅ 航段数据抓取成功")
+                    print(f"📄 文件路径: {csv_file}")
+                    self.log(f"航段数据抓取成功: {csv_file}", "SUCCESS")
+                    return True
+                else:
+                    print("❌ 保存失败")
+                    self.log("保存航段数据失败", "ERROR")
+                    return False
+            else:
+                print("❌ 未提取到数据")
+                self.log("未提取到航段数据", "ERROR")
+                return False
+
+        except Exception as e:
+            print(f"❌ 航段数据抓取出错: {e}")
+            self.log(f"航段数据抓取出错: {e}", "ERROR")
+            return False
+
+    def check_fault_data(self):
+        """
+        检查故障数据（在同一进程内）
+
+        Returns:
+            bool: 是否成功
+        """
+        print(f"\n{'='*60}")
+        print(f"🔍 执行任务: 故障数据检查")
+        print(f"⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print('='*60)
+
+        self.log("开始检查故障数据")
+
+        try:
+            # 确保在正确的标签页上操作
+            if not self.fault_fetcher.ensure_assigned_tab(self.fault_page):
+                print("⚠️  标签页切换失败")
+                return False
+
+            # 执行检查（不需要实际抓取数据，只需确保页面在监控状态）
+            result = self.fault_fetcher.navigate_to_target_page(
+                self.fault_page,
+                datetime.now().strftime('%Y-%m-%d')
+            )
+
+            if result:
+                print("✅ 故障监控页面检查完成")
+                self.log("故障监控页面检查完成", "SUCCESS")
+                return True
+            else:
+                print("❌ 故障监控页面检查失败")
+                self.log("故障监控页面检查失败", "ERROR")
+                return False
+
+        except Exception as e:
+            print(f"❌ 故障数据检查出错: {e}")
+            self.log(f"故障数据检查出错: {e}", "ERROR")
+            return False
+
+    def parse_time(self, time_str: str) -> datetime:
+        """解析时间字符串为今天的datetime对象"""
         today = datetime.now().date()
         hour, minute = map(int, time_str.split(':'))
         return datetime.combine(today, datetime.min.time()) + timedelta(hours=hour, minutes=minute)
 
-    def wait_until_time(self, target_time: datetime):
-        """
-        等待直到目标时间
-
-        Args:
-            target_time: 目标时间
-        """
-        now = datetime.now()
-
-        if target_time <= now:
-            # 目标时间已过，设置为明天
-            target_time += timedelta(days=1)
-
-        delta = target_time - now
-        wait_seconds = delta.total_seconds()
-
-        print(f"\n⏰ 等待至 {target_time.strftime('%Y-%m-%d %H:%M:%S')}...")
-        print(f"⏳ 等待时长: {delta.seconds // 3600}小时 {(delta.seconds % 3600) // 60}分钟")
-
-        self.log(f"等待至 {target_time.strftime('%Y-%m-%d %H:%M:%S')}")
-
-        time.sleep(wait_seconds)
-
     def run_daily_schedule(self):
         """
-        运行每日调度 - 基于航班生命周期的智能监控
-
-        ⚠️ 注意：项目中所有时间统一使用北京时间
+        运行每日调度 - 单进程智能监控
 
         监控策略:
-        1. 持续监控leg页面（每分钟检查）
-        2. 检测航段状态变化（起飞、降落、备降等异常）
-        3. 自动发送邮件通知
+        1. 持续监控 leg 页面（每分钟检查）
+        2. 定期检查 fault 页面（每5分钟）
+        3. 检测航段状态变化并自动通知
         """
         scheduler_config = self.config['scheduler']
 
@@ -264,22 +275,36 @@ class TaskScheduler:
             print(f"           航程 {info['duration_minutes']}分钟, 航线 {info['route']}")
 
         print(f"\n⏰ 运行时间: {scheduler_config['start_time']} - {scheduler_config['end_time']}")
-        print("🎯 监控模式: 智能航段状态监控")
-        print("   - 持续监控Leg数据页面（每分钟）")
+        print("🎯 监控模式: 单进程智能监控")
+        print("   - Leg数据: 每分钟检查")
+        print("   - Fault数据: 每5分钟检查")
         print("   - 自动检测状态变化并通知")
         print("="*60)
+
+        # ========== 初始化阶段 ==========
+        print("\n🔧 初始化阶段...")
+        if not self.connect_all_fetchers():
+            print("❌ 浏览器连接失败，退出")
+            return
+
+        if not self.login_all_fetchers():
+            print("❌ 登录失败，退出")
+            return
 
         # 等待到启动时间
         now = datetime.now()
         if start_time > now:
-            self.wait_until_time(start_time)
+            print(f"\n⏰ 等待至 {start_time.strftime('%Y-%m-%d %H:%M:%S')}...")
+            time.sleep((start_time - now).total_seconds())
 
-        # 主循环 - 智能航段状态监控
-        print("\n🚀 开始智能航段状态监控...")
+        # ========== 主监控循环 ==========
+        print("\n🚀 开始智能监控...")
         print(self.flight_tracker.get_status_summary())
 
-        last_check_time = None
-        check_interval = timedelta(minutes=1)  # 每分钟检查一次
+        last_leg_check = None
+        last_fault_check = None
+        leg_interval = timedelta(minutes=1)
+        fault_interval = timedelta(minutes=5)
 
         while True:
             now = datetime.now()
@@ -290,132 +315,117 @@ class TaskScheduler:
                 self.log("到达结束时间，停止运行")
                 break
 
-            # 每分钟检查一次
-            if last_check_time is None or (now - last_check_time) >= check_interval:
+            # 每分钟检查 Leg 数据
+            if last_leg_check is None or (now - last_leg_check) >= leg_interval:
                 print(f"\n{'='*60}")
-                print(f"🔍 [{now.strftime('%H:%M:%S')}] 检查航班状态...")
+                print(f"🔍 [{now.strftime('%H:%M:%S')}] 检查航段状态...")
                 print('='*60)
 
-                # 监控Leg页面
-                print("📊 监控 Leg 数据（航段状态）...")
                 self.stats['leg_fetch_count'] += 1
 
-                if self.fetch_and_update_leg_data():
+                if self.fetch_leg_data():
                     self.stats['leg_success_count'] += 1
                     print("✅ Leg数据检查完成")
                 else:
                     self.stats['leg_failure_count'] += 1
                     print("⚠️ Leg数据检查失败")
 
+                last_leg_check = now
+
+                # 更新 flight_tracker 状态
+                try:
+                    import pandas as pd
+                    from pathlib import Path
+
+                    leg_data_file = Path("data/leg_data.csv")
+                    if leg_data_file.exists():
+                        df = pd.read_csv(leg_data_file)
+                        today = datetime.now().strftime('%Y-%m-%d')
+
+                        if '日期' in df.columns:
+                            today_data = df[df['日期'] == today].to_dict('records')
+                        else:
+                            self.log("CSV中缺少'日期'列", "ERROR")
+                            today_data = []
+
+                        if today_data:
+                            self.flight_tracker.update_from_latest_leg_data(today_data)
+                            self.log(f"已更新flight_tracker状态，共{len(today_data)}条记录")
+
+                except Exception as e:
+                    self.log(f"更新flight_tracker失败: {e}", "ERROR")
+
                 # 显示当前状态摘要
                 print(self.flight_tracker.get_status_summary())
 
-                last_check_time = now
+            # 每5分钟检查 Fault 数据
+            if last_fault_check is None or (now - last_fault_check) >= fault_interval:
+                print(f"\n{'='*60}")
+                print(f"🔍 [{now.strftime('%H:%M:%S')}] 检查故障状态...")
+                print('='*60)
+
+                self.stats['fault_check_count'] += 1
+
+                if self.check_fault_data():
+                    self.stats['fault_success_count'] += 1
+                    print("✅ Fault数据检查完成")
+                else:
+                    self.stats['fault_failure_count'] += 1
+                    print("⚠️ Fault数据检查失败")
+
+                last_fault_check = now
 
             # 短暂休眠避免CPU占用过高
             time.sleep(10)
-
-        # 汇总报告已禁用，仅保留航班状态变化通知
-        # 调度器统计数据通过日志文件记录
-
-    def send_summary_report(self):
-        """发送汇总报告（已禁用）"""
-        # 汇总报告已禁用，仅保留航班状态变化通知
-        # 调度器统计数据通过日志文件记录
-        pass
-
-    def fetch_and_update_leg_data(self, target_date=None):
-        """
-        抓取并更新航段数据（完整流程）
-        1. Fetch leg data
-        2. Update leg data（仅在状态变化时）
-        3. 更新 flight_tracker 状态
-        4. 自动触发邮件通知
-
-        Args:
-            target_date: 可选的目标日期
-
-        Returns:
-            bool: 整体是否成功
-        """
-        # 步骤1: 抓取数据
-        fetch_success = self.fetch_leg_data()
-        if not fetch_success:
-            print("❌ 数据抓取失败，跳过更新")
-            return False
-
-        # 步骤2: 更新数据（会自动检测状态变化和发送邮件）
-        if target_date is None:
-            target_date = datetime.now().strftime('%Y-%m-%d')
-
-        update_success = self.run_update_script(
-            'leg_data_update',
-            '航段数据更新',
-            target_date
-        )
-
-        # 步骤3: 更新flight_tracker状态
-        if update_success:
-            try:
-                import pandas as pd
-                from pathlib import Path
-
-                leg_data_file = Path("data/leg_data.csv")
-                if leg_data_file.exists():
-                    df = pd.read_csv(leg_data_file)
-                    today = datetime.now().strftime('%Y-%m-%d')
-
-                    # 只读取今天的最新数据（CSV列名是中文'日期'）
-                    if '日期' in df.columns:
-                        today_data = df[df['日期'] == today].to_dict('records')
-                    else:
-                        self.log("CSV中缺少'日期'列", "ERROR")
-                        today_data = []
-
-                    if today_data:
-                        self.flight_tracker.update_from_latest_leg_data(today_data)
-                        self.log(f"已更新flight_tracker状态，共{len(today_data)}条记录")
-
-            except KeyError as e:
-                self.log(f"更新flight_tracker失败 - KeyError: {e}", "ERROR")
-                import traceback
-                self.log(traceback.format_exc(), "ERROR")
-            except Exception as e:
-                self.log(f"更新flight_tracker失败: {e}", "ERROR")
-                import traceback
-                self.log(traceback.format_exc(), "ERROR")
-
-        return update_success
 
     def run_interactive(self):
         """交互式运行（用于测试）"""
         print("\n🎯 交互式模式")
         print("="*60)
-        print("1. 抓取并更新航段数据（Fetch & Update Leg Data）")
-        print("   - 抓取最新数据")
-        print("   - 检测状态变化并更新")
-        print("   - 自动发送邮件通知")
-        print("2. 退出")
+        print("1. 抓取航段数据（Fetch Leg Data）")
+        print("2. 检查故障数据（Check Fault Data）")
+        print("3. 同时执行两者（Both）")
+        print("4. 退出")
         print("="*60)
 
         while True:
-            choice = input("\n请选择操作 (1-2): ").strip()
+            choice = input("\n请选择操作 (1-4): ").strip()
 
             if choice == '1':
-                print("\n📋 执行航段数据完整流程...")
+                print("\n📋 执行航段数据抓取...")
                 self.stats['leg_fetch_count'] = self.stats.get('leg_fetch_count', 0) + 1
 
-                if self.fetch_and_update_leg_data():
+                if self.fetch_leg_data():
                     self.stats['leg_success_count'] = self.stats.get('leg_success_count', 0) + 1
-                    print("\n✅ 航段数据流程执行完成")
+                    print("\n✅ 航段数据抓取完成")
                 else:
                     self.stats['leg_failure_count'] = self.stats.get('leg_failure_count', 0) + 1
-                    print("\n⚠️ 航段数据流程执行失败")
+                    print("\n⚠️ 航段数据抓取失败")
 
             elif choice == '2':
+                print("\n📋 执行故障数据检查...")
+                self.stats['fault_check_count'] = self.stats.get('fault_check_count', 0) + 1
+
+                if self.check_fault_data():
+                    self.stats['fault_success_count'] = self.stats.get('fault_success_count', 0) + 1
+                    print("\n✅ 故障数据检查完成")
+                else:
+                    self.stats['fault_failure_count'] = self.stats.get('fault_failure_count', 0) + 1
+                    print("\n⚠️ 故障数据检查失败")
+
+            elif choice == '3':
+                print("\n📋 同时执行航段数据和故障数据检查...")
+
+                leg_success = self.fetch_leg_data()
+                fault_success = self.check_fault_data()
+
+                if leg_success and fault_success:
+                    print("\n✅ 所有任务执行完成")
+                else:
+                    print("\n⚠️ 部分任务执行失败")
+
+            elif choice == '4':
                 print("\n👋 退出系统")
-                # 汇总报告已禁用，仅保留航班状态变化通知
-                # 调度器统计数据通过日志文件记录
                 break
 
             else:
@@ -425,16 +435,25 @@ class TaskScheduler:
 def main():
     """主函数"""
     print("\n" + "="*60)
-    print("🛫 航段数据监控系统")
+    print("🛫 航段数据监控系统 - 统一调度器")
     print("="*60)
     print(f"启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*60)
 
-    scheduler = TaskScheduler()
+    scheduler = UnifiedScheduler()
 
     # 检查命令行参数
     if len(sys.argv) > 1 and sys.argv[1] == '--interactive':
         # 交互式模式
+        # 首先连接浏览器
+        if not scheduler.connect_all_fetchers():
+            print("❌ 浏览器连接失败，退出")
+            return
+
+        if not scheduler.login_all_fetchers():
+            print("❌ 登录失败，退出")
+            return
+
         scheduler.run_interactive()
     else:
         # 调度模式
@@ -442,8 +461,6 @@ def main():
             scheduler.run_daily_schedule()
         except KeyboardInterrupt:
             print("\n\n⚠️ 收到中断信号，正在退出...")
-            # 汇总报告已禁用，仅保留航班状态变化通知
-            # 调度器统计数据通过日志文件记录
         except Exception as e:
             print(f"\n❌ 系统错误: {e}")
             scheduler.log(f"系统错误: {e}", "ERROR")

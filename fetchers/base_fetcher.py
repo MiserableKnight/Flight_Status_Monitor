@@ -156,6 +156,40 @@ class BaseFetcher(ABC):
             print("⚠️ 配置文件中未找到飞机号列表,使用默认值")
             self.aircraft_list = ["B-652G", "B-656E"]
 
+    def _cleanup_old_backups(self, backup_dir, base_name, extension, keep_count=2):
+        """
+        清理旧备份文件，只保留最新的几个
+
+        :param backup_dir: 备份目录
+        :param base_name: 文件基础名称（如 'leg_data'）
+        :param extension: 文件扩展名（如 '.csv'）
+        :param keep_count: 保留的备份数量，默认为2
+        """
+        try:
+            # 获取所有匹配的备份文件
+            pattern = f"{base_name}_*{extension}"
+            backup_files = []
+
+            for filename in os.listdir(backup_dir):
+                if filename.startswith(f"{base_name}_") and filename.endswith(extension):
+                    filepath = os.path.join(backup_dir, filename)
+                    # 获取文件修改时间
+                    mtime = os.path.getmtime(filepath)
+                    backup_files.append((filepath, mtime, filename))
+
+            # 按修改时间排序（最新的在前）
+            backup_files.sort(key=lambda x: x[1], reverse=True)
+
+            # 如果文件数量超过保留数量，删除旧的
+            if len(backup_files) > keep_count:
+                files_to_delete = backup_files[keep_count:]
+                for filepath, _, filename in files_to_delete:
+                    os.remove(filepath)
+                    print(f"   🗑️  删除旧备份: {filename}")
+
+        except Exception as e:
+            print(f"   ⚠️ 清理旧备份失败: {e}")
+
     @staticmethod
     def get_today_date():
         """获取当天日期,格式: YYYY-MM-DD"""
@@ -484,7 +518,7 @@ class BaseFetcher(ABC):
 
         filepath = os.path.join(data_dir, filename)
 
-        # 备份策略：只备份 data/leg_data.csv 总表，且每天最多备份一次
+        # 备份策略：只备份 data/leg_data.csv 总表，最多保留2个备份
         needs_backup = (
             subdir == 'data' and  # 只在 data 文件夹下
             filename == 'leg_data.csv' and  # 只备份总表
@@ -496,20 +530,22 @@ class BaseFetcher(ABC):
             if not os.path.exists(backup_dir):
                 os.makedirs(backup_dir)
 
-            # 检查今天是否已备份
-            today = datetime.now().strftime("%Y%m%d")
+            # 生成带时间戳的备份文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             name, ext = os.path.splitext(filename)
-            today_backup = f"{name}_{today}{ext}"
-            today_backup_path = os.path.join(backup_dir, today_backup)
+            backup_filename = f"{name}_{timestamp}{ext}"
+            backup_path = os.path.join(backup_dir, backup_filename)
 
-            if not os.path.exists(today_backup_path):
-                # 今天还没备份，执行备份
-                try:
-                    shutil.copy2(filepath, today_backup_path)
-                    print(f"   💾 已备份总表: {today_backup_path}")
-                except Exception as e:
-                    print(f"   ⚠️ 备份失败: {e}")
-            # 如果今天的备份已存在，跳过备份
+            try:
+                # 先备份当前文件
+                shutil.copy2(filepath, backup_path)
+                print(f"   💾 已备份总表: {backup_path}")
+
+                # 清理旧备份，只保留最新的2个
+                self._cleanup_old_backups(backup_dir, name, ext, keep_count=2)
+
+            except Exception as e:
+                print(f"   ⚠️ 备份失败: {e}")
 
         try:
             # 使用 'w' 模式覆盖写入

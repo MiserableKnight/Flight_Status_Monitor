@@ -20,6 +20,15 @@ from fetchers.base_fetcher import BaseFetcher
 class FaultFetcher(BaseFetcher):
     """故障数据监控器"""
 
+    def get_target_url_keyword(self):
+        """
+        返回用于标签页匹配的URL关键词
+
+        Returns:
+            str: 'integratedMonitorController'
+        """
+        return "integratedMonitorController"
+
     def get_data_prefix(self):
         """返回数据文件前缀"""
         return "fault_data"

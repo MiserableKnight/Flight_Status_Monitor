@@ -26,6 +26,15 @@ from fetchers.base_fetcher import BaseFetcher
 class LegFetcher(BaseFetcher):
     """航段数据抓取器（优化版）"""
 
+    def get_target_url_keyword(self):
+        """
+        返回用于标签页匹配的URL关键词
+
+        Returns:
+            str: 'lineLogController'
+        """
+        return "lineLogController"
+
     def get_data_prefix(self):
         """返回数据文件前缀"""
         return "leg_data"

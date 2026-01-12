@@ -66,31 +66,43 @@ class BaseFetcher(ABC):
         cls._shared_tab_counter = 0
         print("✅ 标签页注册表已重置")
 
-    @classmethod
-    def cleanup_invalid_registry_entries(cls, current_tab_count):
+    def get_target_url_keyword(self):
         """
-        清理注册表中的无效条目（索引超出当前标签页数量）
+        获取目标URL关键词，用于标签页匹配
+        子类应该重写此方法以返回特定的URL关键词
 
-        :param current_tab_count: 当前浏览器的标签页数量
-        :return: 清理的条目数量
+        Returns:
+            str: URL关键词（如 'lineLogController' 或 'integratedMonitorController'）
         """
-        tab_registry = cls._load_tab_registry()
-        if not tab_registry:
-            return 0
+        raise NotImplementedError(f"{self.fetcher_name} 必须实现 get_target_url_keyword()")
 
-        invalid_keys = [
-            key for key, index in tab_registry.items()
-            if index >= current_tab_count
-        ]
+    def find_tab_by_url(self, browser, url_keyword):
+        """
+        通过URL关键词查找标签页
 
-        if invalid_keys:
-            print(f"🧹 清理 {len(invalid_keys)} 个无效注册条目: {invalid_keys}")
-            for key in invalid_keys:
-                del tab_registry[key]
-            cls._save_tab_registry(tab_registry)
-            return len(invalid_keys)
+        Args:
+            browser: 浏览器对象
+            url_keyword: URL关键词
 
-        return 0
+        Returns:
+            ChromiumPage: 找到的标签页对象，未找到返回 None
+        """
+        try:
+            all_tabs = browser.get_tabs()
+            for tab in all_tabs:
+                try:
+                    tab_url = tab.url
+                    if url_keyword in tab_url:
+                        print(f"   ✅ 通过关键词 '{url_keyword}' 找到已存在的标签页")
+                        print(f"   📍 URL: {tab_url}")
+                        return tab
+                except Exception as e:
+                    # 某些标签页可能无法访问URL，跳过
+                    continue
+            return None
+        except Exception as e:
+            print(f"   ⚠️ 查找标签页时出错: {e}")
+            return None
 
     def __init__(self, config_file=None):
         """
@@ -166,12 +178,12 @@ class BaseFetcher(ABC):
 
     def connect_browser(self):
         """
-        连接到浏览器并分配独立标签页
+        连接到浏览器并分配独立标签页（基于URL匹配）
 
-        使用共享浏览器模式：
-        - 所有fetcher实例共享同一个浏览器连接
-        - 每个fetcher分配一个独立的标签页（使用索引）
-        - 避免标签页冲突和互相干扰
+        核心改进：
+        - 使用URL关键词而非索引来管理标签页
+        - 避免索引动态变化导致的混乱
+        - 更稳定、更可靠的标签页识别机制
 
         :return: ChromiumPage 对象,失败返回 None
         """
@@ -194,124 +206,114 @@ class BaseFetcher(ABC):
                 self.log(f"Browser connection failed: {e}", "ERROR")
                 return None
 
-        # 为当前fetcher分配独立标签页
-        page = BaseFetcher._shared_browser
-
-        # 获取当前标签页数量
-        tab_count = len(page.browser.get_tabs())
-
-        # 主动清理所有无效的注册表条目（防止浏览器重启后索引失效）
-        BaseFetcher.cleanup_invalid_registry_entries(tab_count)
+        # 获取浏览器对象
+        browser = BaseFetcher._shared_browser
 
         print(f"\n{'='*60}")
-        print(f"📋 标签页分配管理")
+        print(f"📋 标签页分配管理（基于URL匹配）")
         print(f"{'='*60}")
-        print(f"📊 当前标签页数量: {tab_count}")
         print(f"🏷️  Fetcher类型: {self.fetcher_name}")
-        print(f"📍 当前标签页ID: {page.tab_id}")
-        print(f"📋 所有标签页数量: {tab_count}")
+        print(f"🔍 URL关键词: {self.get_target_url_keyword()}")
 
-        # 从文件加载注册表（跨进程共享）
-        tab_registry = self._load_tab_registry()
-        print(f"📝 已注册标签页（从文件）: {tab_registry}")
+        # 步骤1：通过URL关键词查找已存在的标签页
+        url_keyword = self.get_target_url_keyword()
+        existing_tab = self.find_tab_by_url(browser, url_keyword)
 
-        # 步骤1：检查是否已为此类型分配标签页，并验证有效性
-        needs_new_tab = True  # 默认需要分配新标签页
+        if existing_tab:
+            # 找到已存在的标签页，直接复用
+            print(f"🔄 复用已存在的标签页")
+            self.assigned_tab_object = existing_tab
 
-        if self.fetcher_name in tab_registry:
-            # 已分配，验证索引是否仍然有效
-            self.assigned_tab_index = tab_registry[self.fetcher_name]
-            print(f"✅ 复用已分配的标签页索引: {self.assigned_tab_index}")
+            # 获取当前标签页数量（用于日志）
+            all_tabs = browser.get_tabs()
+            for idx, tab in enumerate(all_tabs):
+                if tab.tab_id == existing_tab.tab_id:
+                    self.assigned_tab_index = idx
+                    print(f"📍 标签页索引: {idx}")
+                    break
 
-            # 验证标签页索引是否仍然有效
-            if self.assigned_tab_index < len(page.browser.get_tabs()):
-                # 索引有效，直接复用
-                self.assigned_tab_object = page.get_tab(self.assigned_tab_index)
-                if hasattr(self.assigned_tab_object, 'focus'):
-                    self.assigned_tab_object.focus()
-                print(f"🔄 已切换到标签页索引: {self.assigned_tab_index}")
-                needs_new_tab = False  # 不需要创建新标签页
-            else:
-                # 索引无效（可能是新浏览器会话，标签页数量减少）
-                print(f"⚠️  警告: 标签页索引 {self.assigned_tab_index} 超出范围 (当前只有 {len(page.browser.get_tabs())} 个标签页)")
-                print(f"🔄 清除无效注册，将创建新标签页...")
+            # 确保标签页获得焦点
+            if hasattr(self.assigned_tab_object, 'focus'):
+                self.assigned_tab_object.focus()
+            print(f"✅ 已切换到 {self.fetcher_name} 的标签页")
+            print(f"{'='*60}\n")
+            return self.assigned_tab_object
 
-                # 从注册表中移除无效条目
-                del tab_registry[self.fetcher_name]
-                self._save_tab_registry(tab_registry)
-                # needs_new_tab 保持为 True，将执行下面的新标签页创建逻辑
+        # 步骤2：未找到匹配的标签页，创建新标签页
+        print(f"🆕 未找到匹配标签页，创建新标签页...")
 
-        # 步骤2：如果需要，创建新标签页或使用现有标签页
-        if needs_new_tab:
-            # 检查注册表中是否已有其他 fetcher
-            if len(tab_registry) == 0:
-                # 注册表为空，这是第一个 fetcher，使用现有标签页（索引0）
-                self.assigned_tab_index = 0
-                self.assigned_tab_object = page  # 第一个标签页就是主page对象
-                tab_registry[self.fetcher_name] = self.assigned_tab_index
-                self._save_tab_registry(tab_registry)  # 保存到文件
-                print(f"✅ 使用第一个标签页索引: {self.assigned_tab_index}")
-            else:
-                # 注册表非空，说明已有其他 fetcher，需要创建新标签页
-                print(f"🆕 检测到已有 {len(tab_registry)} 个 fetcher，创建新标签页...")
-                # 创建新标签页
-                new_tab = page.new_tab("about:blank")
+        # 检查是否有空白标签页可以复用
+        all_tabs = browser.get_tabs()
+        blank_tab = None
 
-                # 等待新标签页创建完成
-                time.sleep(0.5)
+        for tab in all_tabs:
+            try:
+                tab_url = tab.url
+                if "about:blank" in tab_url or "newtab" in tab_url or "chrome://" in tab_url:
+                    blank_tab = tab
+                    print(f"   🔄 发现空白标签页，将复用")
+                    break
+            except:
+                continue
 
-                # 重新获取标签页列表，获取最新索引
-                new_tab_count = len(page.browser.get_tabs())
-                self.assigned_tab_index = new_tab_count - 1
+        if blank_tab:
+            # 复用空白标签页
+            self.assigned_tab_object = blank_tab
+            print(f"   ✅ 复用空白标签页")
+        else:
+            # 创建新标签页
+            print(f"   🌐 创建新标签页...")
+            self.assigned_tab_object = browser.new_tab("about:blank")
+            time.sleep(0.5)  # 等待标签页创建完成
+            print(f"   ✅ 新标签页已创建")
 
-                # 获取新标签页对象并保存
-                self.assigned_tab_object = page.get_tab(self.assigned_tab_index)
+        # 获取标签页索引（用于日志）
+        all_tabs = browser.get_tabs()
+        for idx, tab in enumerate(all_tabs):
+            if tab.tab_id == self.assigned_tab_object.tab_id:
+                self.assigned_tab_index = idx
+                print(f"📍 标签页索引: {idx}")
+                break
 
-                tab_registry[self.fetcher_name] = self.assigned_tab_index
-                self._save_tab_registry(tab_registry)  # 保存到文件
+        # 确保标签页获得焦点
+        if hasattr(self.assigned_tab_object, 'focus'):
+            self.assigned_tab_object.focus()
 
-                print(f"✅ 新标签页已创建，索引: {self.assigned_tab_index}")
-
-                # 显式切换到新创建的标签页
-                if hasattr(self.assigned_tab_object, 'focus'):
-                    self.assigned_tab_object.focus()
-                print(f"🔄 已切换到新标签页")
-
+        print(f"✅ {self.fetcher_name} 标签页分配完成")
         print(f"{'='*60}\n")
 
-        # 返回分配的标签页对象（而不是主page对象）
         return self.assigned_tab_object
 
     def ensure_assigned_tab(self, page):
         """
-        确保操作在分配的标签页上执行
+        确保操作在分配的标签页上执行（使用tab_id而非索引）
+
+        核心改进：
+        - 使用稳定的 tab_id 而非动态变化的索引
+        - 更可靠的标签页识别和切换机制
 
         :param page: ChromiumPage 对象
         """
-        if self.assigned_tab_index is None:
+        if self.assigned_tab_object is None:
             print(f"⚠️  警告: {self.fetcher_name} 尚未分配标签页")
             return False
 
-        # 通过查找当前标签页在列表中的索引来判断
-        # 获取所有标签页的ID列表
-        tabs = page.browser.get_tabs()
-        tab_ids_list = [tab.tab_id for tab in tabs]
+        # 使用 tab_id 进行比较（更稳定）
         current_tab_id = page.tab_id
-        current_tab_index = tab_ids_list.index(current_tab_id) if current_tab_id in tab_ids_list else -1
+        assigned_tab_id = self.assigned_tab_object.tab_id
 
-        if current_tab_index != self.assigned_tab_index:
+        if current_tab_id != assigned_tab_id:
             print(f"\n🔄 检测到标签页切换，切换回分配的标签页...")
-            print(f"   当前标签页索引: {current_tab_index}")
-            print(f"   分配标签页索引: {self.assigned_tab_index}")
+            print(f"   当前标签页ID: {current_tab_id}")
+            print(f"   分配标签页ID: {assigned_tab_id}")
 
-            # 切换到分配的标签页
-            if self.assigned_tab_index < len(page.browser.get_tabs()):
-                target_tab = page.get_tab(self.assigned_tab_index)
-                if hasattr(target_tab, 'focus'):
-                    target_tab.focus()
+            # 切换到分配的标签页（使用对象而非索引）
+            try:
+                if hasattr(self.assigned_tab_object, 'focus'):
+                    self.assigned_tab_object.focus()
                 print(f"   ✅ 已切换回 {self.fetcher_name} 的标签页\n")
-            else:
-                print(f"   ❌ 标签页索引超出范围\n")
+            except Exception as e:
+                print(f"   ❌ 切换失败: {e}\n")
                 return False
 
         return True

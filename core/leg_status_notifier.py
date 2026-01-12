@@ -154,17 +154,23 @@ class LegStatusNotifier:
             smtp_server = self.config['smtp_server']
             smtp_port = self.config['smtp_port']
 
+            print(f"📧 正在连接SMTP服务器: {smtp_server}:{smtp_port}")
+            print(f"📤 发件人: {self.config['smtp_user']}")
+            print(f"📥 收件人: {self.config['receiver_email']}")
+
             if self.config.get('use_ssl', False):
                 # SSL连接
                 with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
                     server.login(self.config['smtp_user'], self.config['smtp_password'])
                     server.send_message(msg)
+                    print(f"✅ 邮件已通过SSL发送")
             else:
                 # TLS连接
                 with smtplib.SMTP(smtp_server, smtp_port) as server:
                     server.starttls()
                     server.login(self.config['smtp_user'], self.config['smtp_password'])
                     server.send_message(msg)
+                    print(f"✅ 邮件已通过TLS发送")
 
             self.log(f"邮件发送成功: {subject}", "SUCCESS")
             return True

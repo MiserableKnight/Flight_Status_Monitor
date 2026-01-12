@@ -161,11 +161,17 @@ class FlightStatus:
 class FlightTracker:
     """航班状态跟踪器（管理多架飞机的多个航班）"""
 
-    def __init__(self):
-        """初始化跟踪器"""
+    def __init__(self, monitored_aircraft: List[str] = None):
+        """
+        初始化跟踪器
+
+        Args:
+            monitored_aircraft: 需要监控的飞机号列表，如果为None则加载所有飞机
+        """
         self.log = get_logger()
         self.flights: Dict[str, FlightStatus] = {}  # {aircraft_registration: FlightStatus}
         self.leg_data_file = Path("data/leg_data.csv")
+        self.monitored_aircraft = monitored_aircraft  # 保存监控飞机列表
 
         # 加载已有的leg数据
         self._load_existing_leg_data()
@@ -187,6 +193,11 @@ class FlightTracker:
 
                 if not aircraft or not flight_number:
                     continue
+
+                # 如果指定了监控飞机列表，只加载列表中的飞机
+                if self.monitored_aircraft is not None:
+                    if aircraft not in self.monitored_aircraft:
+                        continue
 
                 # 只关注今天的航班（CSV列名是中文'日期'）
                 flight_date = row.get('日期')

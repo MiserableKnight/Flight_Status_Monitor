@@ -48,8 +48,9 @@ class TaskScheduler:
         gmail_config = self.config.get('gmail', {})
         self.notifier = GmailNotifier(config=gmail_config) if gmail_config else None
 
-        # 初始化航班状态跟踪器
-        self.flight_tracker = FlightTracker()
+        # 初始化航班状态跟踪器（传入配置的飞机列表）
+        aircraft_list = self.config.get('aircraft_list', [])
+        self.flight_tracker = FlightTracker(monitored_aircraft=aircraft_list)
 
         # 统计数据
         self.stats = {

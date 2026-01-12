@@ -30,119 +30,42 @@ class LegFetcher(BaseFetcher):
         """返回数据文件前缀"""
         return "leg_data"
 
-    def check_page_ready(self, page, aircraft_list, target_date):
+    def check_initialized(self, _target_date=None):
         """
-        检查页面是否已就绪（已在目标页面且设置完成）
+        检查是否已初始化（使用状态标记，不检查页面）
 
         核心逻辑:
-        1. 一旦进入目标页面就停留在那里
-        2. 首次进入需要设置机号和日期
-        3. 后续只需点击查询按钮
-
-        检测策略优化:
-        - 给页面一点时间加载（可能刚跳转过来）
-        - 检查日期和数据行综合判断
+        1. 使用内部状态标记，避免检查页面的开销
+        2. 首次运行时需要初始化
+        3. 一旦初始化完成，后续直接使用快速刷新模式
 
         Args:
-            page: ChromiumPage 对象
-            aircraft_list: 飞机列表
-            target_date: 目标日期
+            _target_date: 目标日期（未使用，保留接口兼容性）
 
         Returns:
-            bool: True 表示已就绪，False 表示需要初始化
+            bool: True 表示已初始化，False 表示需要初始化
         """
         print("\n" + "="*60)
-        print("🔍 页面状态检测")
+        print("🔍 检查初始化状态")
         print("="*60)
 
-        current_url = page.url
-        print(f"📍 当前URL: {current_url}")
-
-        # 核心检查: 是否在目标页面
-        if "lineLogController/index.html" not in current_url:
-            print("   ❌ 不在目标页面")
-            print("   → 需要导航到 lineLogController/index.html")
-            return False
-
-        print("   ✅ 已在目标页面: lineLogController/index.html")
-
-        # 给页面一点时间加载元素（可能刚跳转过来）
-        print("   ⏳ 等待页面元素加载...")
-        time.sleep(1)
-
-        # 检查页面元素是否加载完成
-        start_input = page.ele('tag:input@@id=startTime')
-        if not start_input:
-            print("   ⚠️ 页面元素未加载完成")
-            return False
-
-        # 检查当前日期设置
-        current_date = start_input.attr('value') or ''
-        print(f"📅 当前页面日期: [{current_date}]")
-        print(f"📅 目标抓取日期: [{target_date}]")
-
-        # 检查日期是否匹配
-        date_mismatch = target_date not in current_date
-
-        # 检查是否有数据行（最直接的判断标准）
-        data_con = page.ele('tag:div@@id=dataCon1')
-        if data_con:
-            rows = data_con.eles('tag:div@@class=tr_title')
-            if rows:
-                # 有数据行，说明已经设置过机号
-                if date_mismatch:
-                    # 日期不匹配，但页面已就绪
-                    # 只需更新日期，不需要重新选择机号
-                    print(f"   ✅ 页面已就绪（机号已设置）")
-                    print(f"   ⚠️ 日期不匹配，需要更新日期")
-                    print(f"   📊 当前数据行: {len(rows)}")
-                    print(f"   ⚡ 策略: 更新日期后直接查询")
-                    print("="*60)
-
-                    # 更新日期
-                    print(f"\n🔄 更新日期为: {target_date}")
-                    start_input.run_js('this.value = arguments[0]', target_date)
-                    start_input.run_js('this.dispatchEvent(new Event("change", {bubbles: true}))')
-
-                    end_input = page.ele('tag:input@@id=endTime')
-                    if end_input:
-                        end_input.run_js('this.value = arguments[0]', target_date)
-                        end_input.run_js('this.dispatchEvent(new Event("change", {bubbles: true}))')
-
-                    # 点击查询按钮
-                    query_btn = page.ele('tag:input@@value=查询 @@class=button_partial2')
-                    if query_btn:
-                        query_btn.click(by_js=True)
-                        print("   ✅ 已更新日期并点击查询")
-
-                    # 等待数据刷新
-                    time.sleep(2)
-
-                    return True
-
-                else:
-                    # 日期匹配，页面就绪
-                    print(f"   ✅ 页面已就绪！")
-                    print(f"   📅 日期: {current_date}")
-                    print(f"   📊 数据行: {len(rows)}")
-                    print(f"   ⚡ 可使用快速刷新模式")
-                    print("="*60)
-                    return True
-
-        # 如果没有数据行，说明确实需要初始化
-        if date_mismatch:
-            print("   → 需要初始化: 日期不匹配且无数据")
+        if self._initialized:
+            print(f"   ✅ 已初始化")
+            print(f"   ⚡ 使用快速刷新模式")
+            print("="*60)
+            return True
         else:
-            print("   → 需要初始化: 未检测到数据")
-        print("   💡 说明: 首次运行或需要重新设置查询条件")
-        print("="*60)
-        return False
+            print(f"   ❌ 未初始化")
+            print(f"   → 需要执行首次初始化（设置机号和日期）")
+            print("="*60)
+            return False
 
     def quick_refresh(self, page):
         """
         快速刷新：只点击查询按钮
 
         核心逻辑:
+        - 确保在分配的标签页上操作
         - 系统已在目标页面，机号和日期已设置
         - 只需要点击查询按钮刷新数据
         - 不需要任何页面跳转或表单填写
@@ -153,6 +76,11 @@ class LegFetcher(BaseFetcher):
         Returns:
             bool: 是否成功
         """
+        # 标签页隔离检查
+        if not self.ensure_assigned_tab(page):
+            print("⚠️  标签页检查失败")
+            return False
+
         print("\n" + "="*60)
         print("⚡ 快速刷新模式")
         print("="*60)
@@ -195,144 +123,119 @@ class LegFetcher(BaseFetcher):
         """
         选择指定的飞机(通过序列号筛选)
 
-        优化:
-        1. 先检查是否已选择目标飞机，避免重复操作
-        2. 精确定位序列号下拉框，避免误操作其他下拉框（如所属客户）
+        采用老代码的简单方式:
+        1. 通过"序列号:"标签定位下拉框
+        2. 点击 filter-option 下拉框
+        3. 清空所有已选项
+        4. 选择目标飞机
         """
         print(f"\n📋 开始选择飞机...")
 
         # 等待页面完全加载
         print("   ⏳ 等待页面元素加载...")
+        time.sleep(3)
+
+        # 方法1: 通过查找标签文本定位
+        label_ele = page.ele('tag:p@text()=序列号:')
+        if label_ele:
+            print("   ✅ 找到标签: 序列号")
+
+            # 找到标签旁边的下拉框 div
+            aircraft_dropdown = None
+
+            # 方法1: 查找标签的父元素,然后找同级的下拉框
+            parent = label_ele.parent()
+            if parent:
+                # 在父元素的同级或兄弟元素中查找 filter-option
+                dropdown = parent.ele('tag:div@@class=filter-option')
+                if dropdown:
+                    aircraft_dropdown = dropdown
+                    print("   ✅ 通过父元素找到下拉框")
+                else:
+                    # 尝试查找父元素的下一个兄弟元素
+                    next_sibling = parent.next()
+                    if next_sibling:
+                        dropdown = next_sibling.ele('tag:div@@class=filter-option')
+                        if dropdown:
+                            aircraft_dropdown = dropdown
+                            print("   ✅ 通过兄弟元素找到下拉框")
+
+            # 方法2: 如果上面都失败,直接查找所有 filter-option
+            if not aircraft_dropdown:
+                all_dropdowns = page.eles('tag:div@@class=filter-option')
+                if len(all_dropdowns) > 0:
+                    # 通常是第一个或第二个
+                    aircraft_dropdown = all_dropdowns[0]
+                    print(f"   ✅ 找到 {len(all_dropdowns)} 个下拉框,使用第一个")
+
+            if aircraft_dropdown:
+                aircraft_dropdown.click(by_js=True)
+                time.sleep(1)
+                print("   ✅ 已点击序列号下拉框")
+            else:
+                print("   ❌ 未找到序列号下拉框")
+                return False
+        else:
+            print("   ❌ 未找到'序列号'标签")
+            print("   🔍 尝试直接定位下拉框...")
+            # 直接查找所有 filter-option
+            all_dropdowns = page.eles('tag:div@@class=filter-option')
+            if len(all_dropdowns) > 0:
+                print(f"   ✅ 找到 {len(all_dropdowns)} 个下拉框")
+                all_dropdowns[0].click(by_js=True)
+                time.sleep(1)
+                print("   ✅ 已点击第一个下拉框")
+            else:
+                print("   ❌ 未找到任何下拉框")
+                return False
+
+        # 等待下拉选项出现
         time.sleep(2)
 
-        # ========== 精确定位序列号下拉框 ==========
-        label_ele = page.ele('tag:p@text()=序列号:')
-        if not label_ele:
-            print("   ❌ 未找到'序列号'标签")
-            return False
-
-        print("   ✅ 找到标签: 序列号")
-
-        # 查找标签旁边的下拉框
-        aircraft_dropdown = None
-
-        # 方法1: 通过父元素查找
-        parent = label_ele.parent()
-        if parent:
-            # 在父元素中查找 filter-option
-            dropdown = parent.ele('tag:div@@class=filter-option')
-            if dropdown:
-                aircraft_dropdown = dropdown
-                print("   ✅ 通过父元素找到序列号下拉框")
-            else:
-                # 尝试查找父元素的下一个兄弟元素
-                next_sibling = parent.next()
-                if next_sibling:
-                    dropdown = next_sibling.ele('tag:div@@class=filter-option')
-                    if dropdown:
-                        aircraft_dropdown = dropdown
-                        print("   ✅ 通过兄弟元素找到序列号下拉框")
-
-        if not aircraft_dropdown:
-            print("   ❌ 未找到序列号下拉框")
-            return False
-
-        # ========== 检查当前选择状态 ==========
-        print("   🔍 检查当前选择状态...")
-
-        # 点击下拉框查看当前选择
-        aircraft_dropdown.click(by_js=True)
-        time.sleep(1)
-
-        # 只在序列号下拉框内查找选项
-        # 通过下拉框的父元素来限定查找范围
-        dropdown_container = aircraft_dropdown.parent()
-        if dropdown_container:
-            # 在容器内查找已选择的选项
-            selected_elements = dropdown_container.eles('tag:li@@class=selected')
-            selected_aircrafts = []
-            for ele in selected_elements:
-                text = ele.text.strip()
-                if text and text != '请选择...':
-                    selected_aircrafts.append(text)
-
-            print(f"   📋 序列号已选择: {selected_aircrafts}")
-
-            # 检查是否所有目标飞机都已选择
-            all_selected = True
-            for aircraft in aircraft_list:
-                found = False
-                for selected in selected_aircrafts:
-                    if aircraft in selected:
-                        found = True
-                        break
-                if not found:
-                    all_selected = False
-                    break
-
-            if all_selected and len(selected_aircrafts) == len(aircraft_list):
-                print("   ✅ 所有目标飞机已选择，跳过选择步骤")
-                # 关闭下拉框
-                try:
-                    page.ele('tag:body').click()
-                except:
-                    pass
-                return True
-
-        # 关闭下拉框，准备重新选择
-        try:
-            page.ele('tag:body').click()
-        except:
-            pass
-        time.sleep(0.5)
-
-        # ========== 重新选择飞机 ==========
-        print("   🔄 需要重新选择飞机...")
-
-        # 再次点击下拉框
-        aircraft_dropdown.click(by_js=True)
-        time.sleep(1)
-
-        # 先取消所有已选择的飞机选项（只在序列号下拉框内操作）
-        print("   🔍 清空序列号已选项...")
-
-        if dropdown_container:
-            # 在容器内查找已选择的选项并取消
-            selected_elements = dropdown_container.eles('tag:li@@class=selected')
-            for ele in selected_elements:
-                text = ele.text.strip()
-                if text and text != '请选择...':
+        # 先取消所有已选择的飞机选项(清空所有选项)
+        print("   🔍 清空所有已选项...")
+        text_elements = page.eles('tag:span@@class=text')
+        for ele in text_elements:
+            parent = ele.parent()
+            if parent:
+                parent_attr = parent.attr('class') or ''
+                if 'selected' in parent_attr or 'active' in parent_attr:
+                    # 取消所有选中的选项
+                    text = ele.text.strip()
                     print(f"   🔄 取消选择: {text}")
-                    ele.click(by_js=True)
+                    parent.click(by_js=True)
                     time.sleep(0.3)
 
         time.sleep(1)
 
-        # 选择指定的飞机（只在序列号下拉框内操作）
+        # 选择指定的飞机(直接匹配飞机号)
         print("   🎯 开始选择目标飞机...")
         selected_count = 0
 
-        if dropdown_container:
-            for aircraft in aircraft_list:
-                # 在容器内查找所有选项
-                all_options = dropdown_container.eles('tag:li')
-                found = False
-                for ele in all_options:
-                    text = ele.text.strip()
-                    # 使用包含匹配
-                    if aircraft in text:
-                        print(f"   ✅ 选择飞机: {text}")
-                        try:
+        for aircraft in aircraft_list:
+            # 重新获取元素列表
+            text_elements = page.eles('tag:span@@class=text')
+            found = False
+            for ele in text_elements:
+                text = ele.text.strip()
+                # 使用包含匹配
+                if aircraft in text:
+                    print(f"   ✅ 选择飞机: {text}")
+                    try:
+                        parent = ele.parent()
+                        if parent:
+                            parent.click(by_js=True)
+                        else:
                             ele.click(by_js=True)
-                        except Exception as e:
-                            print(f"   ⚠️ 点击失败: {e}")
-                        time.sleep(0.5)
-                        selected_count += 1
-                        found = True
-                        break
+                    except Exception as e:
+                        print(f"   ⚠️ 点击失败: {e}")
+                    time.sleep(0.5)
+                    selected_count += 1
+                    found = True
+                    break
 
-                if not found:
-                    print(f"   ⚠️ 未找到飞机: {aircraft}")
+            if not found:
+                print(f"   ⚠️ 未找到飞机: {aircraft}")
 
         # 点击其他地方关闭下拉框
         try:
@@ -457,27 +360,34 @@ class LegFetcher(BaseFetcher):
         导航到目标页面并执行抓取逻辑（优化版）
 
         核心逻辑:
-        1. 一旦进入 https://cis.comac.cc:8004/caphm/lineLogController/index.html 就停留
-        2. 首次运行: 填写机号和日期，点击查询
-        3. 后续运行: 直接点击查询按钮（机号和日期已设置）
+        1. 确保在分配的标签页上操作（标签页隔离）
+        2. 一旦进入 https://cis.comac.cc:8004/caphm/lineLogController/index.html 就停留
+        3. 首次运行: 填写机号和日期，点击查询
+        4. 后续运行: 直接点击查询按钮（机号和日期已设置）
 
         :param page: ChromiumPage 对象
         :param target_date: 目标日期
         :return: 成功返回数据,失败返回 None
         """
+        # 标签页隔离检查
+        if not self.ensure_assigned_tab(page):
+            print("⚠️  标签页检查失败")
+            return None
+
         print("\n" + "="*60)
         print("🚀 航段数据抓取器启动")
         print(f"⏰ 启动时间: {time.strftime('%H:%M:%S')}")
         print(f"📅 目标日期: {target_date}")
         print(f"✈️ 监控飞机: {', '.join(self.aircraft_list)}")
+        print(f"🏷️  标签页索引: {self.assigned_tab_index}")
         print("="*60)
 
-        # ========== 步骤0: 检查页面状态 ==========
-        print("\n🔍 步骤0: 检查页面状态")
+        # ========== 步骤0: 检查初始化状态 ==========
+        print("\n🔍 步骤0: 检查初始化状态")
 
-        if self.check_page_ready(page, self.aircraft_list, target_date):
-            # 页面已就绪，使用快速刷新模式
-            print("\n✨ 检测结果: 页面已就绪")
+        if self.check_initialized(target_date):
+            # 已初始化，使用快速刷新模式
+            print("\n✨ 检测结果: 已初始化")
             print("⚡ 使用快速刷新模式: 只点击查询按钮")
             print("⏱️ 预计耗时: 2-3秒")
             print("💡 机号和日期已设置，无需重复填写")
@@ -604,9 +514,16 @@ class LegFetcher(BaseFetcher):
             print("   ❌ 数据加载超时")
             return None
 
-        # ========== 步骤6: 提取数据 ==========
-        print("\n🎯 步骤6: 提取数据")
-        print("💡 下次运行将直接点击查询按钮，无需重复设置")
+        # ========== 步骤6: 设置初始化标记 ==========
+        print("\n🎯 步骤6: 设置初始化标记")
+        self._initialized = True
+        self._initialized_date = target_date
+        print(f"   ✅ 初始化完成！")
+        print(f"   📅 初始化日期: {target_date}")
+        print(f"   💡 下次运行将直接点击查询按钮，无需重复设置机号和日期")
+
+        # ========== 步骤7: 提取数据 ==========
+        print("\n🎯 步骤7: 提取数据")
         return self.extract_table_data(page)
 
 

@@ -26,6 +26,12 @@
 
 ```
 Flight_Status_Monitor/
+├── bin/                         # 可执行脚本目录
+│   ├── run_leg_scheduler.py     # 航段监控启动器
+│   ├── run_fault_scheduler.py   # 故障监控启动器
+│   ├── leg_monitor.bat          # 航段监控批处理（端口9222）
+│   └── faults_monitor.bat       # 故障监控批处理（端口9333）
+│
 ├── config/                      # 配置目录
 │   ├── __init__.py
 │   ├── config.ini               # 核心配置文件（使用 config.ini.example 作为模板）
@@ -55,21 +61,59 @@ Flight_Status_Monitor/
 │   ├── leg_data_update.py       # 数据更新处理
 │   └── leg_status_monitor.py    # 状态监控处理
 │
+├── schedulers/                  # 调度器（新增）
+│   ├── __init__.py
+│   ├── leg_scheduler.py         # 航段数据调度器
+│   └── fault_scheduler.py       # 故障数据调度器
+│
+├── interfaces/                  # 接口定义（新增）
+│   └── scheduler_interface.py   # 调度器接口
+│
 ├── data/                        # 数据存储目录
 │   ├── daily_raw/               # 每日原始数据
 │   ├── backup/                  # 历史备份
 │   └── leg_data.csv             # 航段数据汇总
+│
+├── tests/                       # 测试代码（原test/目录）
+│   └── __init__.py
 │
 ├── docs/                        # 文档目录
 │   ├── SCHEDULER_GUIDE.md       # 调度模式使用指南
 │   └── TIMEZONE.md              # 时区策略说明
 │
 ├── logs/                        # 系统日志（保留24小时）
-│
-├── main_scheduler.py            # 系统主调度器（使用 subprocess 调用脚本）
-├── run_system.bat               # 一键启动脚本
+├── __init__.py                  # 主包初始化文件
 ├── requirements.txt             # 项目依赖（DrissionPage >= 4.0.0）
 └── README.md                    # 项目说明
+```
+
+### 使用方法
+
+#### 方式1：直接运行批处理脚本（推荐）
+
+双击运行对应的批处理脚本：
+
+- `bin/leg_monitor.bat` - 启动航段监控（连接到端口9222的主浏览器）
+- `bin/faults_monitor.bat` - 启动故障监控（连接到端口9333的独立浏览器）
+
+#### 方式2：使用Python运行
+
+```bash
+# 航段监控
+python bin/run_leg_scheduler.py
+
+# 故障监控
+python bin/run_fault_scheduler.py
+```
+
+#### 方式3：使用模块方式运行
+
+```bash
+# 航段监控
+python -m schedulers.leg_scheduler
+
+# 故障监控
+python -m schedulers.fault_scheduler
 ```
 
 ## 快速开始

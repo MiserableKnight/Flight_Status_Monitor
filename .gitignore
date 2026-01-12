@@ -8,6 +8,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+build/
+dist/
+*.egg-info/
 
 # Virtual Environment
 venv/
@@ -27,9 +30,15 @@ chrome_debug/
 .DS_Store
 Thumbs.db
 
-# Data files (entire data folder)
-data/
+# Data files (根据需要调整)
+data/*.xlsx
+data/*.csv
 
-# Configuration files (keep examples)
-config.ini
+# 测试和覆盖率
+.pytest_cache/
+.coverage
+
+# 临时文件
+*.tmp
+*.bak
 

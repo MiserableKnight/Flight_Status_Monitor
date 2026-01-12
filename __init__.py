@@ -6,4 +6,4 @@ Flight Status Monitor - 航班状态监控系统
 """
 
 __version__ = "4.0.0"
-__author__ = "Your Name"
+__author__ = "MiserableKnight"

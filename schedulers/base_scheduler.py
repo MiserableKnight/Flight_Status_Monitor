@@ -1,0 +1,286 @@
+# -*- coding: utf-8 -*-
+"""
+调度器基类
+
+所有调度器的通用逻辑：
+- 配置加载
+- 时间解析
+- 统计数据
+- 日志记录
+- 主循环框架
+- 依赖注入支持
+"""
+import sys
+import os
+import time
+from datetime import datetime, timedelta
+from abc import ABC, abstractmethod
+from typing import Dict, Any, Optional
+
+# 添加项目根目录到路径
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
+from config.config_loader import load_config
+from config.flight_schedule import FlightSchedule
+from core.logger import get_logger
+from interfaces.interfaces import ILogger, IConfigLoader
+
+
+class BaseScheduler(ABC):
+    """
+    调度器基类（抽象类）
+
+    核心功能：
+    1. 支持依赖注入配置加载器和日志记录器
+    2. 提供时间解析等工具方法
+    3. 定义子类必须实现的方法接口
+    4. 提供主循环框架
+
+    使用依赖注入：
+        scheduler = MyScheduler(
+            config_loader=my_config_loader,
+            logger=my_logger
+        )
+
+    向后兼容（不传参数时自动创建）：
+        scheduler = MyScheduler()
+    """
+
+    def __init__(self,
+                 config_loader: Optional[IConfigLoader] = None,
+                 logger: Optional[ILogger] = None):
+        """
+        初始化调度器（支持依赖注入）
+
+        Args:
+            config_loader: 配置加载器实例（可选，不传则自动创建）
+            logger: 日志记录器实例（可选，不传则自动创建）
+        """
+        # 依赖注入：使用传入的实例或自动创建
+        if config_loader is not None:
+            self.config_loader = config_loader
+        else:
+            # 向后兼容：自动创建配置加载器
+            self.config_loader = load_config()
+
+        # 获取配置
+        self.config = self.config_loader.get_all_config()
+
+        # 依赖注入：使用传入的日志记录器或自动创建
+        if logger is not None:
+            self.log = logger
+        else:
+            # 向后兼容：自动创建日志记录器
+            self.log = get_logger()
+
+        # 调度器名称（子类需要设置）
+        self.scheduler_name = self.__class__.__name__
+        self.data_type = "Unknown"
+
+        # 统计数据（子类可以扩展）
+        self.stats = {
+            'fetch_count': 0,
+            'success_count': 0,
+            'failure_count': 0,
+        }
+
+        self.log(f"{self.scheduler_name} 初始化完成")
+
+    # ========== 抽象方法（子类必须实现） ==========
+
+    @abstractmethod
+    def connect_browser(self):
+        """
+        连接到浏览器
+
+        子类需要实现具体的连接逻辑：
+        - LegScheduler: 连接端口 9222
+        - FaultScheduler: 连接端口 9333
+        """
+        pass
+
+    @abstractmethod
+    def login(self):
+        """
+        执行登录
+
+        子类需要实现具体的登录逻辑
+        """
+        pass
+
+    @abstractmethod
+    def fetch_data(self):
+        """
+        抓取数据
+
+        子类需要实现具体的数据抓取逻辑
+
+        Returns:
+            bool: 是否成功
+        """
+        pass
+
+    @abstractmethod
+    def get_check_interval(self) -> timedelta:
+        """
+        获取检查间隔
+
+        Returns:
+            timedelta: 检查间隔时间
+        """
+        pass
+
+    # ========== 工具方法 ==========
+
+    def parse_time(self, time_str: str) -> datetime:
+        """
+        解析时间字符串为今天的datetime对象
+
+        Args:
+            time_str: 时间字符串，格式 "HH:MM"
+
+        Returns:
+            datetime: 今天的datetime对象
+        """
+        today = datetime.now().date()
+        hour, minute = map(int, time_str.split(':'))
+        return datetime.combine(today, datetime.min.time()) + timedelta(hours=hour, minutes=minute)
+
+    def update_stats(self, success: bool):
+        """
+        更新统计数据
+
+        Args:
+            success: 是否成功
+        """
+        self.stats['fetch_count'] += 1
+        if success:
+            self.stats['success_count'] += 1
+        else:
+            self.stats['failure_count'] += 1
+
+    def print_stats(self):
+        """打印统计信息"""
+        print(f"\n📊 {self.data_type} 监控统计:")
+        print(f"   - 总检查次数: {self.stats['fetch_count']}")
+        print(f"   - 成功次数: {self.stats['success_count']}")
+        print(f"   - 失败次数: {self.stats['failure_count']}")
+        if self.stats['fetch_count'] > 0:
+            success_rate = (self.stats['success_count'] / self.stats['fetch_count']) * 100
+            print(f"   - 成功率: {success_rate:.1f}%")
+
+    # ========== 主循环框架 ==========
+
+    def run(self):
+        """
+        主运行循环（模板方法模式）
+
+        核心流程：
+        1. 初始化（连接、登录）
+        2. 等待到启动时间
+        3. 循环监控
+        4. 定期抓取数据
+        """
+        scheduler_config = self.config.get('scheduler', {})
+
+        # 解析时间配置
+        start_time = self.parse_time(scheduler_config.get('start_time', '06:00'))
+        end_time = self.parse_time(scheduler_config.get('end_time', '23:59'))
+
+        # 显示启动信息
+        self._print_startup_info(scheduler_config, start_time, end_time)
+
+        # ========== 初始化阶段 ==========
+        if not self._initialize():
+            print("❌ 初始化失败，退出")
+            return
+
+        # 等待到启动时间
+        now = datetime.now()
+        if start_time > now:
+            print(f"\n⏰ 等待至 {start_time.strftime('%Y-%m-%d %H:%M:%S')}...")
+            time.sleep((start_time - now).total_seconds())
+
+        # ========== 主监控循环 ==========
+        print(f"\n🚀 开始 {self.data_type} 智能监控...")
+
+        last_check = None
+        check_interval = self.get_check_interval()
+
+        try:
+            while True:
+                now = datetime.now()
+
+                # 检查是否超过结束时间
+                if now > end_time:
+                    print("\n🌙 已到达结束时间，停止运行")
+                    self.log("到达结束时间，停止运行")
+                    break
+
+                # 检查是否需要执行抓取
+                if last_check is None or (now - last_check) >= check_interval:
+                    print(f"\n{'='*60}")
+                    print(f"🔍 [{now.strftime('%H:%M:%S')}] 检查 {self.data_type} 状态...")
+                    print('='*60)
+
+                    # 执行抓取
+                    success = self.fetch_data()
+                    self.update_stats(success)
+
+                    last_check = now
+
+                    # 打印统计
+                    self.print_stats()
+
+                # 短暂休眠避免CPU占用过高
+                time.sleep(10)
+
+        except KeyboardInterrupt:
+            print("\n\n⚠️ 收到中断信号，正在退出...")
+            self.print_stats()
+        except Exception as e:
+            print(f"\n❌ 系统错误: {e}")
+            self.log(f"系统错误: {e}", "ERROR")
+            import traceback
+            traceback.print_exc()
+
+    def _initialize(self) -> bool:
+        """
+        初始化阶段（连接和登录）
+
+        Returns:
+            bool: 是否成功
+        """
+        print("\n🔧 初始化阶段...")
+
+        # 连接浏览器
+        if not self.connect_browser():
+            print("❌ 浏览器连接失败")
+            return False
+        print("✅ 浏览器连接成功")
+
+        # 登录
+        if not self.login():
+            print("❌ 登录失败")
+            return False
+        print("✅ 登录成功")
+
+        return True
+
+    def _print_startup_info(self, scheduler_config: Dict[str, Any], start_time: datetime, end_time: datetime):
+        """
+        打印启动信息
+
+        Args:
+            scheduler_config: 调度器配置
+            start_time: 开始时间
+            end_time: 结束时间
+        """
+        print("\n" + "="*60)
+        print(f"📋 {self.scheduler_name} 启动")
+        print("="*60)
+        print(f"⏰ 运行时间: {scheduler_config.get('start_time', '06:00')} - {scheduler_config.get('end_time', '23:59')}")
+        print(f"🎯 监控模式: {self.data_type} 智能监控")
+        print(f"⏱️  检查间隔: {self.get_check_interval()}")
+        print("="*60)

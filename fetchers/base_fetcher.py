@@ -358,7 +358,7 @@ class BaseFetcher(ABC):
 
         核心优化:
         1. 优先确保在分配的标签页上操作
-        2. 检查是否已在目标页面（lineLogController/index.html）
+        2. 检查是否已在目标页面（lineLogController 或 integratedMonitorController）
         3. 如果已在目标页面，直接返回，不做任何跳转
         4. 只在必要时才执行登录和跳转逻辑
 
@@ -374,10 +374,13 @@ class BaseFetcher(ABC):
         current_url = page.url
         print(f"📍 当前URL: {current_url}")
 
+        # 获取当前 fetcher 的目标 URL 关键词
+        target_keyword = self.get_target_url_keyword()
+
         # ========== 优先级1: 检查是否已在目标页面 ==========
-        # 核心优化: 如果已在航段数据页面，直接返回，不做任何跳转
-        if "lineLogController/index.html" in current_url:
-            print("✅ 已在目标页面: lineLogController/index.html")
+        # 核心优化: 如果已在目标页面（Leg 或 Fault），直接返回，不做任何跳转
+        if target_keyword in current_url:
+            print(f"✅ 已在目标页面: {target_keyword}")
             print("💡 跳过登录流程，保持当前状态")
             self.log("Already at target page, skipping login", "INFO")
             return True
@@ -416,13 +419,17 @@ class BaseFetcher(ABC):
 
         # 智能等待:监控所有可能的页面状态
         print("\n⏳ 智能监控页面跳转...")
-        max_wait = 60
+        max_wait = 90  # 增加等待时间到90秒
         found_target = False
         login_executed = False
 
         for i in range(max_wait):
             # 实时检测URL变化
             current_url = page.url
+
+            # 每5秒打印一次URL
+            if i % 10 == 0:
+                print(f"   📍 [{i//2}s] 当前URL: {current_url}")
 
             # 情况1: 已在目标首页
             if "mainController/index.html" in current_url:
@@ -431,18 +438,28 @@ class BaseFetcher(ABC):
                 break
 
             # 情况2: 在portal登录页 - 需要填充账号密码
-            elif "portal" in current_url and "login" in current_url:
-                if not login_executed and page.ele('#loginPwd'):
-                    print(f"   🔒 检测到portal登录页,开始登录...")
+            # 修改检测条件：portal 在URL中 或者 cis.comac.cc 在URL中且能找到密码框
+            is_portal_page = "portal" in current_url
+            is_cis_login = "cis.comac.cc" in current_url and page.ele('#loginPwd')
+
+            if (is_portal_page or is_cis_login) and not login_executed:
+                pwd_ele = page.ele('#loginPwd')
+                if pwd_ele:
+                    print(f"   🔒 检测到登录页,开始登录...")
                     try:
                         # 填账号
                         user_ele = page.ele('tag:input@@placeholder=请输入账号')
                         if not user_ele:
                             user_ele = page.ele('tag:input@@type=text')
+                        if not user_ele:
+                            # 尝试通过name属性查找
+                            user_ele = page.ele('tag:input@@name=username')
 
                         if user_ele:
+                            print(f"   ✅ 找到账号输入框")
                             user_ele.clear()
                             user_ele.input(self.cfg['username'])
+                            print(f"   📝 账号已填写: {self.cfg['username']}")
                             try:
                                 page.ele('text:FLYWIN').click(by_js=True)
                             except:
@@ -451,14 +468,18 @@ class BaseFetcher(ABC):
                         # 填密码并提交
                         pwd_ele = page.ele('#loginPwd')
                         if pwd_ele:
+                            print(f"   ✅ 找到密码输入框")
                             pwd_ele.clear()
                             pwd_ele.input(self.cfg['password'])
+                            print(f"   📝 密码已填写")
                             print(f"   ⚡ 提交登录...")
                             pwd_ele.input('\n')
                             login_executed = True
 
                     except Exception as e:
                         print(f"   ❌ 登录出错: {e}")
+                        import traceback
+                        traceback.print_exc()
 
             # 情况3: 在rbacUsersController中间页 - 需要点击WEB
             elif "rbacUsersController/login.html" in current_url:

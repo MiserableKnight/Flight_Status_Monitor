@@ -11,7 +11,11 @@
       "Bash(\"venv\\\\Scripts\\\\python.exe\" leg_status_monitor.py 2026-01-09)",
       "Bash(venvScriptspython.exe:*)",
       "Bash(venv/Scripts/python.exe:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(.\\\\venv\\\\Scripts\\\\python.exe:*)",
+      "Bash(cmd /c \"cd /d D:\\\\Code\\\\Flight_Status_Monitor && venv\\\\Scripts\\\\python.exe -c \"\"import sys; sys.path.insert\\(0, ''.''\\); import schedulers.leg_scheduler; print\\(''Import successful''\\)\"\"\")",
+      "Bash(cmd /c \"D:\\\\Code\\\\Flight_Status_Monitor\\\\venv\\\\Scripts\\\\python.exe -c \"\"import sys; sys.path.insert\\(0, ''D:\\\\\\\\Code\\\\\\\\Flight_Status_Monitor''\\); import schedulers.leg_scheduler; print\\(''Import successful''\\)\"\"\")",
+      "Bash(\"D:\\\\Code\\\\Flight_Status_Monitor\\\\venv\\\\Scripts\\\\python.exe\" -c \"import sys; sys.path.insert\\(0, r''D:\\\\Code\\\\Flight_Status_Monitor''\\); import schedulers.leg_scheduler; print\\(''✅ 导入成功''\\)\")"
     ]
   }
 }

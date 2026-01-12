@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title 航班数据抓取系统
+title 航段数据监控 (端口 9222)
 
 REM 设置Python路径（使用虚拟环境中的Python）
 set "PYTHON_EXE=%~dp0venv\Scripts\python.exe"
@@ -18,38 +18,36 @@ if not exist "%PYTHON_EXE%" (
     exit /b 1
 )
 
-echo ============================================================
-echo 🛫 航班数据抓取系统
-echo ============================================================
+echo ========================================================================
+echo 航段数据独立监控 (端口 9222)
+echo ========================================================================
 echo.
-echo 请选择运行模式:
+echo 💡 使用前准备：
+echo    1. 双击原来的 Chrome 快捷方式启动浏览器（端口 9222）
+echo    2. 确保浏览器已打开并登录系统
+echo    3. 运行本脚本开始监控
 echo.
-echo [1] 调度模式 - 自动定时抓取数据 (06:30-21:00)
-echo [2] 交互模式 - 手动选择抓取任务
-echo [3] 退出
+echo ⚙️  功能说明：
+echo    - 连接到主浏览器（端口 9222）
+echo    - 每分钟自动刷新航段数据
+echo    - 与 Fault 数据完全隔离，互不干扰
 echo.
-echo ============================================================
+echo 🛑 停止监控：按 Ctrl+C
+echo ========================================================================
+echo.
 
-set /p choice="请输入选择 (1-3): "
+echo 🚀 启动航段数据独立监控...
+echo.
 
-if "%choice%"=="1" (
+"%PYTHON_EXE%" run_leg_scheduler.py
+
+if %ERRORLEVEL% EQU 0 (
     echo.
-    echo 🚀 启动调度模式...
-    echo.
-    "%PYTHON_EXE%" main_scheduler.py
-    pause
-) else if "%choice%"=="2" (
-    echo.
-    echo 🚀 启动交互模式...
-    echo.
-    "%PYTHON_EXE%" main_scheduler.py --interactive
-    pause
-) else if "%choice%"=="3" (
-    echo.
-    echo 👋 退出系统
-    exit /b 0
+    echo ✅ 监控已正常退出
 ) else (
     echo.
-    echo ❌ 无效选择，请重新运行脚本
-    pause
+    echo ❌ 监控异常退出
 )
+
+echo.
+pause

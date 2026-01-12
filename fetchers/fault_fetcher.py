@@ -25,7 +25,36 @@ from fetchers.base_fetcher import BaseFetcher
 
 
 class FaultFetcher(BaseFetcher):
-    """故障数据监控器（完整版）"""
+    """故障数据监控器（完整版 - 独立端口 9333）"""
+
+    def connect_browser(self):
+        """
+        [重写] 连接到独立的故障监控浏览器 (端口 9333)
+        """
+        from DrissionPage import ChromiumPage, ChromiumOptions
+
+        co = ChromiumOptions()
+        # 1. 设置端口为 9333
+        co.set_local_port(9333)
+        # 2. 设置对应的 User Data 路径 (必须与你快捷方式里设置的一模一样)
+        # 注意：这里使用 r"" 原始字符串防止转义问题
+        co.set_user_data_path(r"C:\Users\zhengqiao\AppData\Local\Google\Chrome\User Data_Fault")
+
+        try:
+            print(f"\n{'='*60}")
+            print(f"🌐 (Fault专用) 连接浏览器端口 9333...")
+            page = ChromiumPage(co)
+            print(f"✅ 连接成功!")
+
+            # 这里的标签页管理很简单，直接获取当前激活的标签页即可
+            # 因为这个浏览器只有你在用
+            self.assigned_tab_object = page.get_tab(page.tab_ids[0])
+            return self.assigned_tab_object
+
+        except Exception as e:
+            print(f"❌ 连接 9333 端口失败: {e}")
+            print("💡 请确保已经通过快捷方式启动了故障监控专用浏览器！")
+            return None
 
     def get_target_url_keyword(self):
         """
@@ -732,65 +761,55 @@ class FaultFetcher(BaseFetcher):
 
 def main():
     """
-    主函数:启动故障监控页面并抓取数据
+    独立运行的故障监控主程序 (循环模式)
 
     说明:
-    - 此脚本会连接到已运行的Chrome浏览器（端口9222）
-    - 请确保先启动Chrome调试模式或让leg_fetcher先运行
+    - 此脚本会连接到独立的故障监控浏览器（端口9333）
+    - 每5分钟自动刷新一次故障数据
+    - 使用独立用户目录，与Leg数据完全隔离
     """
-    print("🚀 启动故障监控...")
+    print("🚀 启动独立故障监控 (端口 9333)...")
 
     fetcher = FaultFetcher()
 
-    # 加载配置获取飞机列表
+    # 获取配置中的飞机列表
     from config.config_loader import load_config
     config_loader = load_config()
     config = config_loader.get_all_config()
     aircraft_list = config.get('aircraft_list', [])
 
-    target_date = fetcher.get_today_date()
+    # 连接浏览器
+    page = fetcher.connect_browser()
+    if not page:
+        print("\n❌ 无法连接到浏览器")
+        print("💡 请确保已经通过快捷方式启动了故障监控专用浏览器（端口9333）！")
+        return
+
+    # 首次登录检查
+    fetcher.smart_login(page)
+
+    print("\n⏰ 开始循环监控: 每 5 分钟刷新一次")
+    print("="*60)
 
     try:
-        # 连接浏览器
-        page = fetcher.connect_browser()
-        if not page:
-            print("\n❌ 无法连接到浏览器")
-            print("💡 请确保:")
-            print("   1. Chrome浏览器已启动调试模式（端口9222）")
-            print("   2. 或者先运行 leg_fetcher 让它建立浏览器连接")
-            return False
+        while True:
+            target_date = fetcher.get_today_date()
+            print(f"\n[{datetime.now().strftime('%H:%M:%S')}] 执行刷新...")
 
-        # 智能登录
-        if not fetcher.smart_login(page):
-            print("\n❌ 登录失败")
-            return False
+            # 抓取数据
+            data = fetcher.navigate_to_target_page(page, target_date, aircraft_list)
 
-        # 导航到故障监控页面并抓取数据
-        data = fetcher.navigate_to_target_page(page, target_date, aircraft_list)
+            if data:
+                csv_file = fetcher.save_to_csv(data)
+                if csv_file:
+                    print(f"✅ 保存成功: {os.path.basename(csv_file)}")
 
-        if data:
-            # 保存数据
-            csv_file = fetcher.save_to_csv(data)
-            if csv_file:
-                print("\n✅ 故障数据抓取完成")
-                print(f"📄 文件路径: {csv_file}")
-                return True
-            else:
-                print("\n⚠️ 数据抓取成功，但保存失败")
-                return False
-        else:
-            print("\n❌ 故障数据抓取失败")
-            return False
+            # 等待 5 分钟 (300秒)
+            print("⏳ 等待 5 分钟...")
+            time.sleep(300)
 
     except KeyboardInterrupt:
-        print("\n\n⚠️ 收到中断信号，正在退出...")
-        print("💡 浏览器仍然保持打开状态")
-        return True
-    except Exception as e:
-        print(f"\n❌ 错误: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        print("\n👋 停止监控")
 
 
 if __name__ == "__main__":

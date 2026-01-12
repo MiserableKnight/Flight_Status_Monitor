@@ -1,14 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-故障数据监控模块
+故障数据监控模块（完整版）
 
 功能:
-- 监控故障页面 https://cis.comac.cc:8004/caphm/integratedMonitorController/list.html?gzphFlag=1&faultType=1,2
+- 选择机号（通过复选框）
+- 点击"历史"按钮
+- 设置时间为当天
+- 点击"查询"按钮
+- 获取并保存故障数据
 - 支持与 leg_fetcher 并行运行，共享同一个浏览器实例
 """
 import time
 import sys
 import os
+import csv
+from datetime import datetime
+from pathlib import Path
 
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -18,7 +25,7 @@ from fetchers.base_fetcher import BaseFetcher
 
 
 class FaultFetcher(BaseFetcher):
-    """故障数据监控器"""
+    """故障数据监控器（完整版）"""
 
     def get_target_url_keyword(self):
         """
@@ -33,16 +40,47 @@ class FaultFetcher(BaseFetcher):
         """返回数据文件前缀"""
         return "fault_data"
 
-    def navigate_to_target_page(self, page, target_date):
+    def check_initialized(self, _target_date=None):
         """
-        导航到故障监控页面（在分配的标签页打开）
+        检查是否已初始化（使用状态标记，不检查页面）
+
+        核心逻辑:
+        1. 使用内部状态标记，避免检查页面的开销
+        2. 首次运行时需要初始化
+        3. 一旦初始化完成，后续直接使用快速刷新模式
+
+        Args:
+            _target_date: 目标日期（未使用，保留接口兼容性）
+
+        Returns:
+            bool: True 表示已初始化，False 表示需要初始化
+        """
+        print("\n" + "="*60)
+        print("🔍 检查初始化状态")
+        print("="*60)
+
+        if self._initialized:
+            print(f"   ✅ 已初始化")
+            print(f"   ⚡ 使用快速刷新模式")
+            print("="*60)
+            return True
+        else:
+            print(f"   ❌ 未初始化")
+            print(f"   → 需要执行首次初始化（选择机号、点击历史、设置日期）")
+            print("="*60)
+            return False
+
+    def navigate_to_target_page(self, page, target_date, aircraft_list=None):
+        """
+        导航到故障监控页面并执行数据抓取
 
         Args:
             page: ChromiumPage 对象
-            target_date: 目标日期（暂不使用，保留接口兼容性）
+            target_date: 目标日期
+            aircraft_list: 要监控的飞机列表
 
         Returns:
-            成功返回 True，失败返回 None
+            成功返回数据列表，失败返回 None
         """
         # 标签页隔离检查
         if not self.ensure_assigned_tab(page):
@@ -50,9 +88,12 @@ class FaultFetcher(BaseFetcher):
             return None
 
         print("\n" + "="*60)
-        print("🚀 故障监控页面启动")
+        print("🚀 故障数据抓取启动")
         print(f"⏰ 启动时间: {time.strftime('%H:%M:%S')}")
         print(f"🏷️  标签页索引: {self.assigned_tab_index}")
+        print(f"📅 目标日期: {target_date}")
+        if aircraft_list:
+            print(f"✈️  监控飞机: {', '.join(aircraft_list)}")
         print("="*60)
 
         # 故障监控页面URL
@@ -62,45 +103,639 @@ class FaultFetcher(BaseFetcher):
         current_url = page.url
         print(f"📍 当前URL: {current_url}")
 
-        if "integratedMonitorController/list.html" in current_url:
+        if "integratedMonitorController/list.html" not in current_url:
+            # 需要导航到故障监控页面
+            print(f"🎯 导航到故障监控页面...")
+            try:
+                page.get(target_url)
+                print("   ✅ 已导航到故障监控页面")
+                time.sleep(3)
+            except Exception as e:
+                print(f"   ❌ 打开出错: {e}")
+                print("="*60)
+                return None
+        else:
             print("   ✅ 已在故障监控页面")
+
+        # 检查是否需要初始化
+        if not self.check_initialized():
+            # 首次初始化：选择机号、点击历史、设置日期
+            if not self.initialize_page(page, aircraft_list, target_date):
+                print("❌ 页面初始化失败")
+                return None
+            # 标记为已初始化
+            self._initialized = True
+
+        # 快速刷新：只点击查询按钮
+        if not self.quick_refresh(page):
+            print("❌ 数据刷新失败")
+            return None
+
+        # 提取数据
+        data = self.extract_fault_data(page)
+        if data:
+            print(f"✅ 成功提取 {len(data)} 条故障记录")
             print("="*60)
+            return data
+        else:
+            print("❌ 未能提取到故障数据")
+            print("="*60)
+            return None
+
+    def initialize_page(self, page, aircraft_list, target_date):
+        """
+        初始化页面：选择机号、点击历史、设置日期
+
+        Args:
+            page: ChromiumPage 对象
+            aircraft_list: 飞机列表
+            target_date: 目标日期
+
+        Returns:
+            bool: 是否成功
+        """
+        print("\n" + "="*60)
+        print("🔧 初始化页面设置")
+        print("="*60)
+
+        # 等待页面完全加载
+        print("   ⏳ 等待页面元素加载...")
+        time.sleep(3)
+
+        # 步骤1：选择机号
+        if aircraft_list:
+            print("\n📍 步骤1: 选择机号")
+            if not self.select_aircrafts(page, aircraft_list):
+                print("   ❌ 选择机号失败")
+                return False
+            print("   ✅ 机号选择完成")
+
+        # 步骤2：点击"历史"按钮
+        print("\n📍 步骤2: 点击'历史'按钮")
+        if not self.click_history_button(page):
+            print("   ❌ 点击历史按钮失败")
+            return False
+        print("   ✅ 已点击历史按钮")
+
+        # 步骤3：设置日期
+        print("\n📍 步骤3: 设置日期")
+        if not self.set_date(page, target_date):
+            print("   ❌ 设置日期失败")
+            return False
+        print(f"   ✅ 日期已设置为: {target_date}")
+
+        print("\n✅ 页面初始化完成")
+        print("="*60)
+        return True
+
+    def select_aircrafts(self, page, aircraft_list):
+        """
+        选择指定的飞机（通过复选框）
+
+        Args:
+            page: ChromiumPage 对象
+            aircraft_list: 飞机列表
+
+        Returns:
+            bool: 是否成功
+        """
+        print(f"   📋 开始选择飞机...")
+
+        # 查找机号下拉框
+        # 结构：<div class="filter-option"><div class="filter-option-inner"><div class="filter-option-inner-inner"></div></div></div>
+        print("   🔍 查找机号下拉框...")
+
+        # 尝试找到第一个 filter-option
+        all_dropdowns = page.eles('tag:div@@class=filter-option')
+        if not all_dropdowns or len(all_dropdowns) == 0:
+            print("   ❌ 未找到机号下拉框")
+            return False
+
+        aircraft_dropdown = all_dropdowns[0]
+        print(f"   ✅ 找到 {len(all_dropdowns)} 个下拉框，使用第一个")
+
+        # 点击下拉框
+        try:
+            aircraft_dropdown.click(by_js=True)
+            time.sleep(1)
+            print("   ✅ 已点击机号下拉框")
+        except Exception as e:
+            print(f"   ❌ 点击下拉框失败: {e}")
+            return False
+
+        # 等待下拉选项出现
+        time.sleep(2)
+
+        # 清空所有已选项
+        print("   🔍 清空所有已选项...")
+        text_elements = page.eles('tag:span@@class=text')
+        for ele in text_elements:
+            parent = ele.parent()
+            if parent:
+                parent_attr = parent.attr('class') or ''
+                if 'selected' in parent_attr or 'active' in parent_attr:
+                    text = ele.text.strip()
+                    print(f"   🔄 取消选择: {text}")
+                    parent.click(by_js=True)
+                    time.sleep(0.3)
+
+        time.sleep(1)
+
+        # 选择指定的飞机
+        print("   🎯 开始选择目标飞机...")
+        selected_count = 0
+
+        for aircraft in aircraft_list:
+            # 重新获取元素列表
+            text_elements = page.eles('tag:span@@class=text')
+            found = False
+            for ele in text_elements:
+                text = ele.text.strip()
+                # 使用包含匹配
+                if aircraft in text:
+                    print(f"   ✅ 选择飞机: {text}")
+                    try:
+                        parent = ele.parent()
+                        if parent:
+                            parent.click(by_js=True)
+                        else:
+                            ele.click(by_js=True)
+                    except Exception as e:
+                        print(f"   ⚠️ 点击失败: {e}")
+                    time.sleep(0.5)
+                    selected_count += 1
+                    found = True
+                    break
+
+            if not found:
+                print(f"   ⚠️ 未找到飞机: {aircraft}")
+
+        # 点击其他地方关闭下拉框
+        try:
+            page.ele('tag:body').click()
+        except:
+            pass
+
+        time.sleep(1)
+
+        if selected_count > 0:
+            print(f"   ✅ 成功选择 {selected_count} 架飞机")
+            return True
+        else:
+            print("   ❌ 未能选择任何飞机")
+            return False
+
+    def click_history_button(self, page):
+        """
+        点击"历史"按钮（单选按钮）
+
+        Args:
+            page: ChromiumPage 对象
+
+        Returns:
+            bool: 是否成功
+        """
+        print("   🔍 查找'历史'按钮...")
+
+        # 查找历史按钮
+        # 结构：<input id="legType3" name="legType" type="radio" value="3" onclick="updateLegType()">
+        history_radio = page.ele('tag:input@@id=legType3@@type=radio')
+
+        if not history_radio:
+            print("   ❌ 未找到'历史'按钮")
+            return False
+
+        print("   ✅ 找到'历史'按钮")
+
+        # 检查是否已选中
+        is_checked = history_radio.attr('checked')
+        if is_checked:
+            print("   ✅ '历史'按钮已选中")
             return True
 
-        # 在当前标签页中打开故障监控页面
-        print(f"🎯 导航到故障监控页面...")
-        print(f"   目标URL: {target_url}")
+        # 点击按钮
+        try:
+            history_radio.click(by_js=True)
+            print("   ✅ 已点击'历史'按钮")
+            time.sleep(1)
+            return True
+        except Exception as e:
+            print(f"   ❌ 点击'历史'按钮失败: {e}")
+            return False
+
+    def set_date(self, page, target_date):
+        """
+        设置日期为当天
+
+        Args:
+            page: ChromiumPage 对象
+            target_date: 目标日期 (YYYY-MM-DD)
+
+        Returns:
+            bool: 是否成功
+        """
+        print(f"   🔍 设置日期为: {target_date}")
+
+        # 解析日期
+        try:
+            date_obj = datetime.strptime(target_date, '%Y-%m-%d')
+        except ValueError:
+            print(f"   ❌ 日期格式错误: {target_date}")
+            return False
+
+        # 查找开始日期输入框
+        # 结构：<input disabled="disabled" type="text" id="from" name="from" class="condition_input" ...>
+        from_input = page.ele('tag:input@@id=from')
+        if not from_input:
+            print("   ⚠️ 未找到开始日期输入框，尝试继续...")
+
+        # 查找结束日期输入框
+        to_input = page.ele('tag:input@@id=to')
+        if not to_input:
+            print("   ⚠️ 未找到结束日期输入框，尝试继续...")
+
+        # 尝试使用 JavaScript 设置日期
+        try:
+            # 使用 JavaScript 设置日期值
+            js_code = f'''
+            // 设置开始日期
+            var fromInput = document.getElementById('from');
+            if (fromInput) {{
+                fromInput.value = '{target_date}';
+                fromInput.setAttribute('value', '{target_date}');
+            }}
+
+            // 设置结束日期
+            var toInput = document.getElementById('to');
+            if (toInput) {{
+                toInput.value = '{target_date}';
+                toInput.setAttribute('value', '{target_date}');
+            }}
+            '''
+            page.run_js(js_code)
+            print(f"   ✅ 日期已设置为: {target_date}")
+            time.sleep(1)
+            return True
+        except Exception as e:
+            print(f"   ❌ 设置日期失败: {e}")
+            return False
+
+    def quick_refresh(self, page):
+        """
+        快速刷新：只点击查询按钮
+
+        Args:
+            page: ChromiumPage 对象
+
+        Returns:
+            bool: 是否成功
+        """
+        print("\n" + "="*60)
+        print("⚡ 快速刷新模式")
+        print("="*60)
+
+        # 点击查询按钮
+        print("   🔍 查找查询按钮...")
+        query_btn = page.ele('tag:input@@value=查询 @@class=button_partial2')
+        if query_btn:
+            print("   ✅ 找到查询按钮")
+            query_btn.click(by_js=True)
+            print("   ✅ 已点击查询按钮")
+        else:
+            print("   ❌ 未找到查询按钮")
+            return False
+
+        # 等待数据刷新
+        print("   ⏳ 等待数据刷新...")
+        time.sleep(3)
+
+        # 等待数据容器更新
+        print("   🔍 检查数据更新...")
+        for i in range(10):
+            data_con = page.ele('tag:div@@id=dataCon')
+            if data_con:
+                rows = data_con.eles('tag:div@@name=t_rtm_faultMainRowDiv')
+                if rows:
+                    print(f"   ✅ 数据已刷新 (耗时: {i+3}秒)")
+                    print(f"   📊 当前数据行数: {len(rows)}")
+                    print("="*60)
+                    return True
+            print(f"   ⏳ 等待中... ({i+3}/10秒)")
+            time.sleep(1)
+
+        print("   ⚠️ 数据刷新较慢，继续提取")
+        print("="*60)
+        return True
+
+    def extract_fault_data(self, page):
+        """
+        从页面中提取故障数据（快速模式）
+
+        Args:
+            page: ChromiumPage 对象
+
+        Returns:
+            list: 故障数据列表
+        """
+        print("\n📊 开始提取故障数据...")
 
         try:
-            # 直接在当前标签页导航（已通过ensure_assigned_tab确保在正确的标签页）
-            page.get(target_url)
-            print("   ✅ 已导航到故障监控页面")
-            print("="*60)
+            # 找到数据容器
+            data_con = page.ele('tag:div@@id=dataCon')
+            if not data_con:
+                print("   ❌ 未找到数据容器 #dataCon")
+                return None
 
-            # 等待页面加载
-            time.sleep(3)
+            print("   ✅ 找到数据容器")
 
-            return True
+            # 使用DOM方式提取所有行（更可靠）
+            rows = data_con.eles('tag:div@@name=t_rtm_faultMainRowDiv')
+            print(f"   ✅ 找到 {len(rows)} 行数据")
+
+            if not rows:
+                print("   ❌ 没有故障数据")
+                return None
+
+            # 批量提取数据（使用DOM但只提取一次）
+            data_list = []
+            for i, row in enumerate(rows):
+                try:
+                    # 直接从元素获取HTML，然后快速解析
+                    row_html = row.html
+                    # 从id属性提取故障ID
+                    row_id = row.attr('id') or ''
+                    fault_id = row_id.replace('t_rtm_faultMainRowDiv', '') if row_id else ''
+
+                    data = self.extract_row_data_fast(row_html, fault_id)
+                    if data:
+                        data_list.append(data)
+                        # 简洁输出（类似Leg Data）
+                        print(f"   📝 第{i+1}行: {data['机号']} - {data['航班号']} - {data['故障描述'][:30]}...")
+                except Exception as e:
+                    print(f"   ⚠️ 提取第{i+1}行失败: {e}")
+                    continue
+
+            print(f"\n   ✅ 成功提取 {len(data_list)} 条故障记录")
+            return data_list
 
         except Exception as e:
-            print(f"   ❌ 打开出错: {e}")
-            print("="*60)
+            print(f"   ❌ 提取数据失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def extract_row_data_fast(self, row_html, fault_id):
+        """
+        从HTML字符串中快速提取故障数据（避免DOM操作）
+
+        Args:
+            row_html: 行HTML字符串
+            fault_id: 故障ID
+
+        Returns:
+            dict: 故障数据字典
+        """
+        data = {}
+        import re
+        from html import unescape
+
+        try:
+            # 使用正则表达式提取各个 li 元素的内容
+            # 匹配 <li class="li0"...>内容</li>
+
+            # 机号 (li[0]) - 从 <p> 标签中提取 B-XXXX
+            # 实际结构: <li class="li0"...>&nbsp;<p style="float: left;cursor:pointer;">B-652G</p>&nbsp;</li>
+            aircraft_match = re.search(r'<li[^>]*class="li0"[^>]*>.*?<p[^>]*>(B-\d{4}[A-Z]?)</p>', row_html, re.DOTALL)
+            data['机号'] = aircraft_match.group(1) if aircraft_match else ''
+
+            # 机型 (li[1])
+            model_match = re.search(r'<li[^>]*class="li0"[^>]*>.*?</li>.*?<li[^>]*class="li0"[^>]*>(C\d{4})\s*&nbsp;', row_html, re.DOTALL)
+            data['机型'] = model_match.group(1) if model_match else ''
+
+            # 航空公司 (li[2]) - 提取 title 属性
+            company_match = re.search(r'<li[^>]*class="li0"[^>]*title="([^"]*)"', row_html, re.DOTALL)
+            data['航空公司'] = company_match.group(1) if company_match else ''
+
+            # 航班号 (li[3])
+            flight_match = re.search(r'<li[^>]*class="li0"[^>]*>([A-Z]{2}\d+)\s*&nbsp;', row_html, re.DOTALL)
+            data['航班号'] = flight_match.group(1) if flight_match else ''
+
+            # 航段 (li[4])
+            leg_match = re.search(r'<li[^>]*class="li0"[^>]*>(\d+)\s*&nbsp;</li>', row_html, re.DOTALL)
+            if not leg_match:
+                # 尝试另一种模式
+                leg_match = re.search(r'<li[^>]*class="li0"[^>]*>(\d+)</li>', row_html, re.DOTALL)
+            data['航段'] = leg_match.group(1) if leg_match else ''
+
+            # 故障码 (li[5])
+            fault_code_match = re.search(r'<li[^>]*class="li0"[^>]*>(\d+)\s*&nbsp;</li>.*?<li[^>]*class="li0"[^>]*>', row_html, re.DOTALL)
+            # 这个位置比较复杂，可能需要从隐藏字段中提取
+            # 尝试从隐藏字段获取
+            hidden_fault_code = re.search(r'<input[^>]*id="faultCode\d+"[^>]*value="(\d+)"', row_html)
+            data['故障码'] = hidden_fault_code.group(1) if hidden_fault_code else fault_id
+
+            # 时间 (li[6])
+            time_match = re.search(r'<li[^>]*class="li0"[^>]*>(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s*&nbsp;', row_html, re.DOTALL)
+            data['时间'] = time_match.group(1) if time_match else ''
+
+            # 故障描述 (li[7] 中的 <a> 标签)
+            # 实际结构: <li><div class="tr_longfont longtext"...><a ... title="ADC1:INTERNAL FAULT">ADC1:INTERNAL FAULT</a></div></li>
+            fault_desc_match = re.search(r'<li[^>]*class="li0"[^>]*longtext[^>]*>.*?<a[^>]*title="([^"]*)"[^>]*>([^<]+)</a>', row_html, re.DOTALL)
+            if fault_desc_match:
+                data['故障描述'] = unescape(fault_desc_match.group(2).strip())
+                data['故障类型'] = unescape(fault_desc_match.group(1))
+            else:
+                data['故障描述'] = ''
+                data['故障类型'] = ''
+
+            # 阶段 (li[8])
+            phase_match = re.search(r'<li[^>]*class="li0"[^>]*>(IN_AIR|IN|LN|GR|SL|In_Air|in_air)\s*&nbsp;', row_html, re.DOTALL)
+            data['阶段'] = phase_match.group(1) if phase_match else ''
+
+            # 状态 (li[9])
+            state_match = re.search(r'<li[^>]*class="li0"[^>]*id="state\d+"[^>]*>.*?<div>([^<]*)</div>', row_html, re.DOTALL)
+            data['状态'] = state_match.group(1) if state_match else ''
+
+            # ATA章节 (li[10])
+            ata_match = re.search(r'<li[^>]*class="li0"[^>]*longtext[^>]*>.*?<div[^>]*>.*?</div>.*?<div[^>]*>([A-Z]-[A-Z])</div>', row_html, re.DOTALL)
+            data['ATA章节'] = ata_match.group(1) if ata_match else ''
+
+            # 添加提取时间
+            data['提取时间'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            return data
+
+        except Exception as e:
+            print(f"      ❌ 快速提取失败: {e}")
+            # 如果快速提取失败，回退到DOM提取
+            return None
+
+    def extract_row_data(self, row):
+        """
+        从单行中提取故障数据（DOM操作模式，作为备用）
+
+        HTML 结构分析：
+        - 机号: li[0] 中的文本
+        - 机型: li[1]
+        - 航空公司: li[2]
+        - 航班号: li[3]
+        - 航段: li[4]
+        - 故障码: li[5]
+        - 时间: li[6]
+        - 故障描述: li[7] 中的 <a> 标签
+        - 状态: li[8]
+        - ATA章节: li[10]
+
+        Args:
+            row: 行元素
+
+        Returns:
+            dict: 故障数据字典
+        """
+        data = {}
+
+        try:
+            # 获取所有 li 元素
+            lis = row.eles('tag:li@@class=li0')
+
+            if len(lis) < 11:
+                print(f"      ⚠️ 列数不足: {len(lis)}")
+                return None
+
+            # 提取各列数据
+            # 机号 (li[0])
+            aircraft_text = lis[0].text.strip()
+            # 从文本中提取机号（包含B-XXXX格式）
+            import re
+            aircraft_match = re.search(r'B-\d{4}', aircraft_text)
+            data['机号'] = aircraft_match.group(0) if aircraft_match else aircraft_text
+
+            # 机型 (li[1])
+            data['机型'] = lis[1].text.strip()
+
+            # 航空公司 (li[2])
+            data['航空公司'] = lis[2].text.strip()
+
+            # 航班号 (li[3])
+            data['航班号'] = lis[3].text.strip()
+
+            # 航段 (li[4])
+            data['航段'] = lis[4].text.strip()
+
+            # 故障码 (li[5])
+            data['故障码'] = lis[5].text.strip()
+
+            # 时间 (li[6])
+            data['时间'] = lis[6].text.strip()
+
+            # 故障描述 (li[7] 中的 <a> 标签)
+            fault_link = lis[7].ele('tag:a')
+            if fault_link:
+                data['故障描述'] = fault_link.text.strip()
+                data['故障类型'] = fault_link.attr('title') or ''
+            else:
+                data['故障描述'] = lis[7].text.strip()
+                data['故障类型'] = ''
+
+            # 阶段 (li[8])
+            data['阶段'] = lis[8].text.strip()
+
+            # 状态 (li[9])
+            state_div = lis[9].ele('tag:div')
+            data['状态'] = state_div.text.strip() if state_div else lis[9].text.strip()
+
+            # ATA章节 (li[10])
+            data['ATA章节'] = lis[10].text.strip()
+
+            # 添加提取时间
+            data['提取时间'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            return data
+
+        except Exception as e:
+            print(f"      ❌ 提取行数据失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def save_to_csv(self, data, filename=None):
+        """
+        保存故障数据到CSV文件
+
+        Args:
+            data: 故障数据列表
+            filename: 文件名（可选）
+
+        Returns:
+            str: 保存的文件路径，失败返回 None
+        """
+        if not data:
+            print("   ❌ 没有数据可保存")
+            return None
+
+        try:
+            # 确定保存路径 - 使用 data/daily_raw 文件夹
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            data_dir = Path("data") / "daily_raw" / today_str
+            data_dir.mkdir(parents=True, exist_ok=True)
+
+            if filename is None:
+                filename = f"fault_data_{today_str}.csv"
+
+            file_path = data_dir / filename
+
+            # 检查文件是否存在
+            file_exists = file_path.exists()
+
+            # 定义字段顺序
+            fieldnames = [
+                '提取时间', '机号', '机型', '航空公司', '航班号', '航段',
+                '故障码', '时间', '故障描述', '故障类型', '阶段', '状态', 'ATA章节'
+            ]
+
+            # 写入CSV文件
+            with open(file_path, 'a', newline='', encoding='utf-8-sig') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+                # 如果文件不存在，写入表头
+                if not file_exists:
+                    writer.writeheader()
+
+                # 写入数据行
+                for row in data:
+                    # 确保所有字段都存在
+                    row_data = {field: row.get(field, '') for field in fieldnames}
+                    writer.writerow(row_data)
+
+            print(f"   ✅ 数据已保存到: {file_path}")
+            print(f"   📊 共保存 {len(data)} 条记录")
+            return str(file_path)
+
+        except Exception as e:
+            print(f"   ❌ 保存文件失败: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
 
 def main():
     """
-    主函数:启动故障监控页面
+    主函数:启动故障监控页面并抓取数据
 
     说明:
     - 此脚本会连接到已运行的Chrome浏览器（端口9222）
     - 请确保先启动Chrome调试模式或让leg_fetcher先运行
     """
-    print("🚀 启动故障监控页面...")
+    print("🚀 启动故障监控...")
 
     fetcher = FaultFetcher()
 
-    # 使用固定的target_date参数（保持接口兼容）
+    # 加载配置获取飞机列表
+    from config.config_loader import load_config
+    config_loader = load_config()
+    config = config_loader.get_all_config()
+    aircraft_list = config.get('aircraft_list', [])
+
     target_date = fetcher.get_today_date()
 
     try:
@@ -118,16 +753,21 @@ def main():
             print("\n❌ 登录失败")
             return False
 
-        # 导航到故障监控页面
-        result = fetcher.navigate_to_target_page(page, target_date)
+        # 导航到故障监控页面并抓取数据
+        data = fetcher.navigate_to_target_page(page, target_date, aircraft_list)
 
-        if result:
-            print("\n✅ 故障监控页面已打开")
-            print("💡 提示: 浏览器将保持打开状态，可以手动查看故障数据")
-            print("💡 按Ctrl+C退出此脚本（浏览器不会关闭）")
-            return True
+        if data:
+            # 保存数据
+            csv_file = fetcher.save_to_csv(data)
+            if csv_file:
+                print("\n✅ 故障数据抓取完成")
+                print(f"📄 文件路径: {csv_file}")
+                return True
+            else:
+                print("\n⚠️ 数据抓取成功，但保存失败")
+                return False
         else:
-            print("\n❌ 打开故障监控页面失败")
+            print("\n❌ 故障数据抓取失败")
             return False
 
     except KeyboardInterrupt:

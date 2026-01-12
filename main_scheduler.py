@@ -206,17 +206,17 @@ class UnifiedScheduler:
 
     def check_fault_data(self):
         """
-        检查故障数据（在同一进程内）
+        抓取故障数据（在同一进程内）
 
         Returns:
             bool: 是否成功
         """
         print(f"\n{'='*60}")
-        print(f"🔍 执行任务: 故障数据检查")
+        print(f"🔍 执行任务: 故障数据抓取")
         print(f"⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print('='*60)
 
-        self.log("开始检查故障数据")
+        self.log("开始抓取故障数据")
 
         try:
             # 确保在正确的标签页上操作
@@ -224,24 +224,41 @@ class UnifiedScheduler:
                 print("⚠️  标签页切换失败")
                 return False
 
-            # 执行检查（不需要实际抓取数据，只需确保页面在监控状态）
-            result = self.fault_fetcher.navigate_to_target_page(
+            # 获取配置的飞机列表
+            aircraft_list = self.config.get('aircraft_list', [])
+            target_date = datetime.now().strftime('%Y-%m-%d')
+
+            # 执行抓取
+            data = self.fault_fetcher.navigate_to_target_page(
                 self.fault_page,
-                datetime.now().strftime('%Y-%m-%d')
+                target_date,
+                aircraft_list
             )
 
-            if result:
-                print("✅ 故障监控页面检查完成")
-                self.log("故障监控页面检查完成", "SUCCESS")
-                return True
+            if data:
+                # 保存数据
+                csv_file = self.fault_fetcher.save_to_csv(
+                    data,
+                    filename=f"fault_data_{target_date}.csv"
+                )
+
+                if csv_file:
+                    print(f"✅ 故障数据抓取成功")
+                    print(f"📄 文件路径: {csv_file}")
+                    self.log(f"故障数据抓取成功: {csv_file}", "SUCCESS")
+                    return True
+                else:
+                    print("❌ 保存失败")
+                    self.log("保存故障数据失败", "ERROR")
+                    return False
             else:
-                print("❌ 故障监控页面检查失败")
-                self.log("故障监控页面检查失败", "ERROR")
+                print("❌ 未提取到数据")
+                self.log("未提取到故障数据", "ERROR")
                 return False
 
         except Exception as e:
-            print(f"❌ 故障数据检查出错: {e}")
-            self.log(f"故障数据检查出错: {e}", "ERROR")
+            print(f"❌ 故障数据抓取出错: {e}")
+            self.log(f"故障数据抓取出错: {e}", "ERROR")
             return False
 
     def parse_time(self, time_str: str) -> datetime:

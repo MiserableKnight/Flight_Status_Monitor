@@ -450,6 +450,13 @@ class FaultFetcher(BaseFetcher):
 
             # 使用DOM方式提取所有行（更可靠）
             rows = data_con.eles('tag:div@@name=t_rtm_faultMainRowDiv')
+
+            # 如果没找到行，多等两秒再试一次，防止由于网络波动导致的抓取失败
+            if not rows:
+                print("   ⏳ 首次未找到数据行，等待2秒后重试...")
+                time.sleep(2)
+                rows = data_con.eles('tag:div@@name=t_rtm_faultMainRowDiv')
+
             print(f"   ✅ 找到 {len(rows)} 行数据")
 
             if not rows:
@@ -486,7 +493,13 @@ class FaultFetcher(BaseFetcher):
 
     def extract_row_data_fast(self, row_html, fault_id):
         """
-        从HTML字符串中快速提取故障数据（避免DOM操作）
+        针对复杂 HTML 结构优化的快速提取算法
+
+        核心优化:
+        1. 优先从隐藏 input 获取核心元数据（最准确）
+        2. 从 <a> 标签 title 属性获取完整故障描述（解决截断问题）
+        3. 增加唯一ID字段用于去重判断
+        4. 更健壮的HTML清理逻辑
 
         Args:
             row_html: 行HTML字符串
@@ -500,65 +513,50 @@ class FaultFetcher(BaseFetcher):
         from html import unescape
 
         try:
-            # 使用正则表达式提取各个 li 元素的内容
-            # 匹配 <li class="li0"...>内容</li>
+            # 提取原始数据（保持HTML结构对应的字段名）
+            def get_hidden_val(name_id):
+                match = re.search(f'id="{name_id}{fault_id}"[^>]*value="([^"]*)"', row_html)
+                return unescape(match.group(1)) if match else ""
 
-            # 机号 (li[0]) - 从 <p> 标签中提取 B-XXXX
-            # 实际结构: <li class="li0"...>&nbsp;<p style="float: left;cursor:pointer;">B-652G</p>&nbsp;</li>
-            aircraft_match = re.search(r'<li[^>]*class="li0"[^>]*>.*?<p[^>]*>(B-\d{4}[A-Z]?)</p>', row_html, re.DOTALL)
-            data['机号'] = aircraft_match.group(1) if aircraft_match else ''
+            # 从隐藏域提取
+            data['FlightlegId'] = get_hidden_val('rtmFlightlegId')
+            data['ReportId'] = get_hidden_val('rtmReportId')
+            data['故障类型'] = get_hidden_val('faultType')
+            data['时间'] = get_hidden_val('messageTime')
 
-            # 机型 (li[1])
-            model_match = re.search(r'<li[^>]*class="li0"[^>]*>.*?</li>.*?<li[^>]*class="li0"[^>]*>(C\d{4})\s*&nbsp;', row_html, re.DOTALL)
-            data['机型'] = model_match.group(1) if model_match else ''
+            # 提取机号
+            aircraft_match = re.search(r'<p[^>]*>(B-[\w]+)</p>', row_html.replace('&nbsp;', ''))
+            data['机号'] = aircraft_match.group(1) if aircraft_match else ""
 
-            # 航空公司 (li[2]) - 提取 title 属性
-            company_match = re.search(r'<li[^>]*class="li0"[^>]*title="([^"]*)"', row_html, re.DOTALL)
-            data['航空公司'] = company_match.group(1) if company_match else ''
+            # 提取所有li内容
+            li_contents = re.findall(r'<li[^>]*class="li0"[^>]*>(.*?)</li>', row_html, re.DOTALL)
 
-            # 航班号 (li[3])
-            flight_match = re.search(r'<li[^>]*class="li0"[^>]*>([A-Z]{2}\d+)\s*&nbsp;', row_html, re.DOTALL)
-            data['航班号'] = flight_match.group(1) if flight_match else ''
+            def clean_html(raw_html):
+                content = re.sub(r'<[^>]+>', '', raw_html)
+                return unescape(content).replace('&nbsp;', '').strip()
 
-            # 航段 (li[4])
-            leg_match = re.search(r'<li[^>]*class="li0"[^>]*>(\d+)\s*&nbsp;</li>', row_html, re.DOTALL)
-            if not leg_match:
-                # 尝试另一种模式
-                leg_match = re.search(r'<li[^>]*class="li0"[^>]*>(\d+)</li>', row_html, re.DOTALL)
-            data['航段'] = leg_match.group(1) if leg_match else ''
+            if len(li_contents) >= 11:
+                data['机型'] = clean_html(li_contents[1])
+                data['航空公司'] = clean_html(li_contents[2])
+                data['航班号'] = clean_html(li_contents[3])
+                data['航段'] = clean_html(li_contents[4])
+                data['故障码'] = clean_html(li_contents[5])
+                # li_contents[6] 是时间
 
-            # 故障码 (li[5])
-            fault_code_match = re.search(r'<li[^>]*class="li0"[^>]*>(\d+)\s*&nbsp;</li>.*?<li[^>]*class="li0"[^>]*>', row_html, re.DOTALL)
-            # 这个位置比较复杂，可能需要从隐藏字段中提取
-            # 尝试从隐藏字段获取
-            hidden_fault_code = re.search(r'<input[^>]*id="faultCode\d+"[^>]*value="(\d+)"', row_html)
-            data['故障码'] = hidden_fault_code.group(1) if hidden_fault_code else fault_id
+                # 故障描述（从title属性获取完整内容）
+                desc_match = re.search(r'<a[^>]*title="([^"]*)"', li_contents[7])
+                data['故障描述'] = unescape(desc_match.group(1)) if desc_match else clean_html(li_contents[7])
 
-            # 时间 (li[6])
-            time_match = re.search(r'<li[^>]*class="li0"[^>]*>(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s*&nbsp;', row_html, re.DOTALL)
-            data['时间'] = time_match.group(1) if time_match else ''
+                data['阶段'] = clean_html(li_contents[8])
+                # li_contents[9] 通常是空的
+                data['状态'] = clean_html(li_contents[10])
 
-            # 故障描述 (li[7] 中的 <a> 标签)
-            # 实际结构: <li><div class="tr_longfont longtext"...><a ... title="ADC1:INTERNAL FAULT">ADC1:INTERNAL FAULT</a></div></li>
-            fault_desc_match = re.search(r'<li[^>]*class="li0"[^>]*longtext[^>]*>.*?<a[^>]*title="([^"]*)"[^>]*>([^<]+)</a>', row_html, re.DOTALL)
-            if fault_desc_match:
-                data['故障描述'] = unescape(fault_desc_match.group(2).strip())
-                data['故障类型'] = unescape(fault_desc_match.group(1))
-            else:
-                data['故障描述'] = ''
-                data['故障类型'] = ''
-
-            # 阶段 (li[8])
-            phase_match = re.search(r'<li[^>]*class="li0"[^>]*>(IN_AIR|IN|LN|GR|SL|In_Air|in_air)\s*&nbsp;', row_html, re.DOTALL)
-            data['阶段'] = phase_match.group(1) if phase_match else ''
-
-            # 状态 (li[9])
-            state_match = re.search(r'<li[^>]*class="li0"[^>]*id="state\d+"[^>]*>.*?<div>([^<]*)</div>', row_html, re.DOTALL)
-            data['状态'] = state_match.group(1) if state_match else ''
-
-            # ATA章节 (li[10])
-            ata_match = re.search(r'<li[^>]*class="li0"[^>]*longtext[^>]*>.*?<div[^>]*>.*?</div>.*?<div[^>]*>([A-Z]-[A-Z])</div>', row_html, re.DOTALL)
-            data['ATA章节'] = ata_match.group(1) if ata_match else ''
+                # ATA章节（倒数第二个li，7%宽度）
+                ata_match = re.findall(r'<li[^>]*style="width:7%;">(.*?)</li>', row_html, re.DOTALL)
+                if len(ata_match) >= 2:
+                    data['ATA章节'] = clean_html(ata_match[1])  # 取最后一个7%的li
+                else:
+                    data['ATA章节'] = ""
 
             # 添加提取时间
             data['提取时间'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -566,8 +564,9 @@ class FaultFetcher(BaseFetcher):
             return data
 
         except Exception as e:
-            print(f"      ❌ 快速提取失败: {e}")
-            # 如果快速提取失败，回退到DOM提取
+            print(f"      ❌ 深度解析失败: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def extract_row_data(self, row):
@@ -684,27 +683,40 @@ class FaultFetcher(BaseFetcher):
 
             file_path = data_dir / filename
 
-            # 检查文件是否存在
-            file_exists = file_path.exists()
-
-            # 定义字段顺序
+            # 定义字段顺序（按照实际页面表头）
             fieldnames = [
-                '提取时间', '机号', '机型', '航空公司', '航班号', '航段',
-                '故障码', '时间', '故障描述', '故障类型', '阶段', '状态', 'ATA章节'
+                '获取时间', '机号', '机型', '航空公司', '航班号',
+                'ATA', '航段', '触发时间', '描述', '故障类型',
+                '飞行阶段', '处理状态', '类别-优先权', 'FlightlegId', 'ReportId'
             ]
 
-            # 写入CSV文件
-            with open(file_path, 'a', newline='', encoding='utf-8-sig') as csvfile:
+            # 写入CSV文件（覆盖模式）
+            with open(file_path, 'w', newline='', encoding='utf-8-sig') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-                # 如果文件不存在，写入表头
-                if not file_exists:
-                    writer.writeheader()
+                # 写入表头
+                writer.writeheader()
 
-                # 写入数据行
+                # 写入数据行，进行字段映射
                 for row in data:
-                    # 确保所有字段都存在
-                    row_data = {field: row.get(field, '') for field in fieldnames}
+                    # 字段映射：原始字段名 -> 实际表头字段名
+                    row_data = {
+                        '获取时间': row.get('提取时间', ''),
+                        '机号': row.get('机号', ''),
+                        '机型': row.get('机型', ''),
+                        '航空公司': row.get('航空公司', ''),
+                        '航班号': row.get('航班号', ''),
+                        'ATA': row.get('ATA章节', ''),
+                        '航段': row.get('航段', ''),
+                        '触发时间': row.get('时间', ''),
+                        '描述': row.get('故障描述', ''),
+                        '故障类型': row.get('故障类型', ''),
+                        '飞行阶段': row.get('阶段', ''),
+                        '处理状态': row.get('状态', ''),
+                        '类别-优先权': '',  # 暂时为空
+                        'FlightlegId': row.get('FlightlegId', ''),
+                        'ReportId': row.get('ReportId', '')
+                    }
                     writer.writerow(row_data)
 
             print(f"   ✅ 数据已保存到: {file_path}")

@@ -154,6 +154,9 @@ class LegScheduler(BaseScheduler):
                     # 更新 flight_tracker 状态
                     self._update_flight_tracker()
 
+                    # 发送邮件通知
+                    self._send_status_notification(target_date)
+
                     return True
                 else:
                     print("❌ 保存失败")
@@ -203,6 +206,38 @@ class LegScheduler(BaseScheduler):
 
         except Exception as e:
             self.log(f"更新flight_tracker失败: {e}", "ERROR")
+
+    def _send_status_notification(self, target_date: str):
+        """
+        发送航段状态变化邮件通知
+
+        Args:
+            target_date: 目标日期字符串 (YYYY-MM-DD)
+        """
+        try:
+            # 动态导入，避免循环依赖
+            import sys
+            import os
+            from pathlib import Path
+
+            # 添加项目根目录到路径
+            project_root = Path(__file__).parent.parent
+            sys.path.insert(0, str(project_root))
+
+            # 导入通知模块
+            from processors.leg_status_monitor import monitor_flight_status
+
+            print("\n📧 检查状态变化...")
+            success = monitor_flight_status(target_date)
+
+            if success:
+                print("✅ 状态监控完成")
+            else:
+                print("⚠️ 状态监控失败")
+
+        except Exception as e:
+            self.log(f"发送状态通知失败: {e}", "ERROR")
+            print(f"⚠️ 邮件通知执行失败: {e}")
 
 
 def main():

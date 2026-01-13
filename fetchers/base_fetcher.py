@@ -352,7 +352,7 @@ class BaseFetcher(ABC):
 
         return True
 
-    def smart_login(self, page):
+    def smart_login(self, page, target_url=None):
         """
         智能登录系统 - 自动检测并处理各种页面状态
 
@@ -361,8 +361,10 @@ class BaseFetcher(ABC):
         2. 检查是否已在目标页面（lineLogController 或 integratedMonitorController）
         3. 如果已在目标页面，直接返回，不做任何跳转
         4. 只在必要时才执行登录和跳转逻辑
+        5. 如果提供了 target_url，登录成功后直接跳转到目标页面
 
         :param page: ChromiumPage 对象
+        :param target_url: 目标URL（可选），登录成功后直接跳转
         :return: 成功返回 True,失败返回 False
         """
         # 标签页隔离检查：确保在分配的标签页上操作
@@ -507,6 +509,43 @@ class BaseFetcher(ABC):
         if found_target or "mainController/index.html" in page.url:
             print(f"🎉 准备完成!当前页面: {page.title}")
             self.log("系统就绪", "SUCCESS")
+
+            # 如果提供了目标URL，直接跳转（避免二次跳转被拦截）
+            if target_url:
+                print(f"🎯 登录成功，直接跳转到目标页面...")
+                print(f"   📍 目标URL: {target_url}")
+                try:
+                    # 记录跳转前的URL
+                    before_url = page.url
+                    print(f"   📍 跳转前URL: {before_url}")
+
+                    page.get(target_url)
+
+                    # 等待页面加载完成
+                    print("   ⏳ 等待目标页面加载...")
+                    success = False
+                    for i in range(15):  # 增加到15秒
+                        current_url = page.url
+                        # 检查是否已到达目标页面（通过URL关键词）
+                        if "integratedMonitorController" in current_url or "lineLogController" in current_url:
+                            print(f"   ✅ 已到达目标页面 (耗时: {i+1}秒)")
+                            print(f"   📍 最终URL: {current_url}")
+                            success = True
+                            break
+                        print(f"   ⏳ 加载中... URL: {current_url[:80]}... ({i+1}/15秒)")
+                        time.sleep(1)
+
+                    if not success:
+                        print(f"   ⚠️ 页面加载超时，可能被重定向")
+                        print(f"   📍 最终URL: {page.url}")
+                        print(f"   💡 将在后续流程中尝试重新跳转")
+
+                except Exception as e:
+                    print(f"   ❌ 跳转失败: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    print(f"   💡 将在后续流程中重试")
+
             return True
         else:
             print(f"❌ 超时或异常,当前页面: {page.url}")

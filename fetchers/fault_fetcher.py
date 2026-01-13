@@ -138,13 +138,39 @@ class FaultFetcher(BaseFetcher):
             try:
                 page.get(target_url)
                 print("   ✅ 已导航到故障监控页面")
-                time.sleep(3)
+
+                # 等待页面关键元素加载完成
+                print("   ⏳ 等待页面加载...")
+                for i in range(10):
+                    # 先检查URL是否已经到达目标页面
+                    current_url_after_nav = page.url
+                    if "integratedMonitorController" in current_url_after_nav:
+                        # 再检查机号下拉框是否已加载
+                        dropdown = page.ele('tag:div@@class=filter-option')
+                        if dropdown:
+                            print(f"   ✅ 页面加载完成 (耗时: {i+1}秒)")
+                            print(f"   📍 当前URL: {current_url_after_nav}")
+                            break
+                    print(f"   ⏳ 加载中... URL: {current_url_after_nav[:80]}... ({i+1}/10秒)")
+                    time.sleep(1)
+                else:
+                    # 10秒后仍未到达目标页面
+                    final_url = page.url
+                    print(f"   ❌ 页面跳转超时")
+                    print(f"   📍 目标URL: {target_url}")
+                    print(f"   📍 实际URL: {final_url}")
+                    if "integratedMonitorController" not in final_url:
+                        print(f"   ❌ 未到达目标页面，跳转失败")
+                        return None
+
             except Exception as e:
                 print(f"   ❌ 打开出错: {e}")
                 print("="*60)
                 return None
         else:
             print("   ✅ 已在故障监控页面")
+            # 即使已在页面，也等待一下确保元素可用
+            time.sleep(1)
 
         # 检查是否需要初始化
         if not self.check_initialized():
@@ -702,9 +728,9 @@ class FaultFetcher(BaseFetcher):
             return None
 
         try:
-            # 确定保存路径 - 使用 data/daily_raw 文件夹
+            # 确定保存路径 - 使用 data/daily_raw 文件夹（使用绝对路径）
             today_str = datetime.now().strftime('%Y-%m-%d')
-            data_dir = Path("data") / "daily_raw" / today_str
+            data_dir = Path(project_root) / "data" / "daily_raw"
             data_dir.mkdir(parents=True, exist_ok=True)
 
             if filename is None:

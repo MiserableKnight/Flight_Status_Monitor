@@ -93,7 +93,7 @@ class FaultScheduler(BaseScheduler):
 
     def login(self):
         """
-        执行登录
+        执行登录（登录后直接跳转到故障监控页面）
 
         Returns:
             bool: 是否成功
@@ -101,7 +101,11 @@ class FaultScheduler(BaseScheduler):
         print("\n🔑 执行智能登录...")
 
         try:
-            if not self.fault_fetcher.smart_login(self.fault_page):
+            # 定义故障监控目标URL
+            target_url = "https://cis.comac.cc:8004/caphm/integratedMonitorController/list.html?gzphFlag=1&faultType=1,2"
+
+            # 登录后直接跳转到目标页面（避免二次跳转被拦截）
+            if not self.fault_fetcher.smart_login(self.fault_page, target_url=target_url):
                 print("❌ FaultFetcher 登录失败")
                 return False
             print("✅ FaultFetcher 登录成功")

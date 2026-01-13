@@ -39,7 +39,10 @@ echo.
 echo 🚀 启动航段数据独立监控...
 echo.
 
-"%PYTHON_EXE%" run_leg_scheduler.py
+REM 切换到项目根目录（避免在bin文件夹下创建data和logs）
+cd /d "%~dp0.."
+
+"%PYTHON_EXE%" bin\run_leg_scheduler.py
 
 if %ERRORLEVEL% EQU 0 (
     echo.

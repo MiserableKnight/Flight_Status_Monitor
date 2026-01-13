@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import os
 import sys
 import hashlib
+import re
 
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -21,6 +22,7 @@ sys.path.insert(0, project_root)
 from core.logger import get_logger
 from core.fault_status_notifier import FaultStatusNotifier
 from config.config_loader import load_config
+from config.flight_phase_mapping import get_phase_name, get_fault_type_name, get_phase_name_without_suffix
 
 # 初始化日志
 log = get_logger()
@@ -178,6 +180,39 @@ def calculate_time_context(fault_time_str, flight_times):
     return None
 
 
+def clean_description(description: str) -> str:
+    """
+    清理故障描述，移除方括号及其内容
+
+    移除的模式包括：
+    - [数字开头的内容] 如 [761 111 00]
+    - [CAUTION]、[WARNING] 等状态标识
+
+    Args:
+        description: 原始故障描述
+
+    Returns:
+        str: 清理后的故障描述
+
+    Examples:
+        >>> clean_description('[761 111 00]ENG NO TAKEOFF DATA[CAUTION]')
+        'ENG NO TAKEOFF DATA'
+        >>> clean_description('ADC1:INTERNAL FAULT')
+        'ADC1:INTERNAL FAULT'
+    """
+    if not description:
+        return ''
+
+    # 移除所有方括号及其内容
+    # 模式：\[.*?\] 匹配 [...]
+    cleaned = re.sub(r'\[.*?\]', '', description)
+
+    # 移除多余的空格
+    cleaned = ' '.join(cleaned.split())
+
+    return cleaned.strip()
+
+
 def load_flight_times(target_date):
     """
     加载航班起降时间数据
@@ -277,22 +312,42 @@ def generate_fault_summary(df, target_date, flight_times_dict=None):
                 fault_type = fault.get('故障类型', '')
                 phase = fault.get('飞行阶段', '')
 
+                # 清理描述：移除方括号内容
+                cleaned_desc = clean_description(description)
+
+                # 将故障类型和飞行阶段缩写转换为中文
+                fault_type_cn = get_fault_type_name(fault_type) if fault_type else ''
+                # 使用不带"阶段"后缀的飞行阶段名称
+                phase_cn = get_phase_name_without_suffix(phase) if phase else ''
+
                 # 计算时间背景
                 time_context = None
                 if flight_times:
                     time_context = calculate_time_context(trigger_time, flight_times)
 
-                # 构建故障行
-                base_info = f"    - {description} ({time_part}"
-                if phase:
-                    base_info += f", {phase}"
-                base_info += ")"
+                # 构建故障行 - 新格式：滑入阶段（降落后1分钟），有CAS信息：ENG NO TAKEOFF DATA
+                fault_line_parts = []
 
-                # 添加时间背景信息
-                if time_context:
-                    fault_lines.append(f"{base_info} [{time_context}]")
+                # 添加飞行阶段和时间背景
+                if phase_cn:
+                    if time_context:
+                        fault_line_parts.append(f"{phase_cn}（{time_context}）")
+                    else:
+                        fault_line_parts.append(f"{phase_cn}阶段")
+                elif time_context:
+                    fault_line_parts.append(f"（{time_context}）")
+
+                # 添加故障类型和描述
+                if fault_type_cn:
+                    fault_line_parts.append(f"有{fault_type_cn}：{cleaned_desc}")
                 else:
-                    fault_lines.append(base_info)
+                    fault_line_parts.append(cleaned_desc)
+
+                # 组合最终行
+                if fault_line_parts:
+                    fault_lines.append(f"    - {'，'.join(fault_line_parts)}")
+                else:
+                    fault_lines.append(f"    - {cleaned_desc}")
 
             if fault_lines:
                 summary_lines.append(flight_line)

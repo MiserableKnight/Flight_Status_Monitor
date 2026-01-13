@@ -242,7 +242,7 @@ def wrap_status_with_abnormal(status_notifications, abnormal_detected, abnormal_
     detector = AbnormalDetector()
     abnormal_type = detector.get_abnormal_type_description(abnormal_detected['abnormal_type'])
 
-    abnormal_warning = f"⚠️ 异常提醒：原计划{abnormal_detected['original_route']}，实际执行{abnormal_detected['actual_route']}，{abnormal_type}。具体情况请询问相应专业人员。"
+    abnormal_warning = f"⚠️ 提醒：原计划{abnormal_detected['original_route']}，实际执行{abnormal_detected['actual_route']}，{abnormal_type}。具体情况请询问相应专业人员。"
 
     # 将异常警告放在状态通知后面
     return status_notifications + [abnormal_warning]

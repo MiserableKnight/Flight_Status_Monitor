@@ -130,7 +130,7 @@ def test_abnormal_detector():
     for ex in abnormal_examples:
         detector = AbnormalDetector()
         abnormal_type = detector.get_abnormal_type_description(ex['info']['abnormal_type'])
-        notification = f"⚠️ {ex['aircraft']} 异常事件：{ex['flight']} {abnormal_type}，原计划{ex['info']['original_route']}，实际执行{ex['info']['actual_route']}，异常{ex['info']['abnormal_airport']}。具体情况请询问相应专业人员。"
+        notification = f"⚠️ {ex['aircraft']} 异常事件：{ex['flight']} {abnormal_type}，原计划{ex['info']['original_route']}，实际执行{ex['info']['actual_route']}，异常{ex['info']['abnormal_airport']}。"
         print(notification)
         print()
 

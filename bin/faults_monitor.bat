@@ -3,7 +3,7 @@ chcp 65001 >nul
 title 故障数据独立监控 (端口 9333)
 
 REM 设置Python路径（使用虚拟环境中的Python）
-set "PYTHON_EXE=%~dp0venv\Scripts\python.exe"
+set "PYTHON_EXE=%~dp0..\venv\Scripts\python.exe"
 
 REM 检查虚拟环境是否存在
 if not exist "%PYTHON_EXE%" (

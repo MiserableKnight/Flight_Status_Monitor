@@ -113,7 +113,7 @@ class FaultScheduler(BaseScheduler):
 
     def fetch_data(self):
         """
-        抓取故障数据
+        抓取故障数据（优化版：先判断再写入）
 
         Returns:
             bool: 是否成功
@@ -128,32 +128,64 @@ class FaultScheduler(BaseScheduler):
             aircraft_list = self.config.get('aircraft_list', [])
             target_date = self.fault_fetcher.get_today_date()
 
-            # 执行抓取
+            # 执行抓取（数据在内存中，尚未写入磁盘）
             data = self.fault_fetcher.navigate_to_target_page(
                 self.fault_page,
                 target_date,
                 aircraft_list
             )
 
-            if data:
-                # 保存数据
-                csv_file = self.fault_fetcher.save_to_csv(
-                    data,
-                    filename=f"fault_data_{target_date}.csv"
-                )
-
-                if csv_file:
-                    print(f"✅ 故障数据抓取成功")
-                    print(f"📄 文件路径: {csv_file}")
-                    self.log(f"故障数据抓取成功: {csv_file}", "SUCCESS")
-                    return True
-                else:
-                    print("❌ 保存失败")
-                    self.log("保存故障数据失败", "ERROR")
-                    return False
-            else:
+            if data is None:
                 print("❌ 未提取到数据")
                 self.log("未提取到故障数据", "ERROR")
+                return False
+
+            # 数据为空的情况
+            if len(data) == 0:
+                print("ℹ️ 当前无故障记录")
+
+                # 检查之前是否有故障（避免重复写空文件）
+                last_count = self._load_last_fault_count(target_date)
+                if last_count == 0:
+                    print("   ⏭️ 之前也无故障记录，跳过写入")
+                    return True
+
+                print(f"   📝 之前有 {last_count} 条故障，现在清空，需要更新")
+                # 继续写入，记录清空状态
+
+            current_count = len(data)
+
+            # 🎯 优化核心：先在内存中对比数据量
+            print(f"\n📊 数据量对比：")
+            last_count = self._load_last_fault_count(target_date)
+            print(f"   上次: {last_count} 条")
+            print(f"   本次: {current_count} 条")
+
+            if current_count == last_count:
+                print(f"\n   ⏭️ 数据量无变化，跳过文件写入和邮件发送")
+                self.log(f"故障数据量未变化 ({current_count}条)，跳过更新", "INFO")
+                return True
+
+            print(f"\n   ✅ 检测到数据变化，开始写入文件")
+
+            # 只有数据变化时才写入CSV（减少磁盘写入）
+            csv_file = self.fault_fetcher.save_to_csv(
+                data,
+                filename=f"fault_data_{target_date}.csv"
+            )
+
+            if csv_file:
+                print(f"✅ 故障数据抓取成功")
+                print(f"📄 文件路径: {csv_file}")
+                self.log(f"故障数据抓取成功: {csv_file} ({current_count}条)", "SUCCESS")
+
+                # 发送邮件通知（内部会更新哈希记录）
+                self._send_status_notification(target_date)
+
+                return True
+            else:
+                print("❌ 保存失败")
+                self.log("保存故障数据失败", "ERROR")
                 return False
 
         except Exception as e:
@@ -169,6 +201,70 @@ class FaultScheduler(BaseScheduler):
             timedelta: 5分钟
         """
         return timedelta(minutes=5)
+
+    def _load_last_fault_count(self, target_date: str) -> int:
+        """
+        读取上次保存的故障数据量
+
+        Args:
+            target_date: 目标日期
+
+        Returns:
+            int: 上次的故障数量，无记录返回-1
+        """
+        try:
+            from pathlib import Path
+            import json
+
+            status_file = Path(__file__).parent.parent / 'data' / 'last_fault_email_status.json'
+
+            if not status_file.exists():
+                return -1  # 无历史记录
+
+            with open(status_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            # 如果日期不匹配，返回-1（新的一天）
+            if data.get('date') != target_date:
+                return -1
+
+            return data.get('fault_count', -1)
+
+        except Exception as e:
+            self.log(f"读取历史故障数量失败: {e}", "ERROR")
+            return -1
+
+    def _send_status_notification(self, target_date: str):
+        """
+        发送故障状态邮件通知
+
+        Args:
+            target_date: 目标日期字符串 (YYYY-MM-DD)
+        """
+        try:
+            # 动态导入，避免循环依赖
+            import sys
+            import os
+            from pathlib import Path
+
+            # 添加项目根目录到路径
+            project_root = Path(__file__).parent.parent
+            sys.path.insert(0, str(project_root))
+
+            # 导入通知模块
+            from processors.fault_status_monitor import monitor_fault_status
+
+            print("\n📧 检查故障状态变化...")
+            success = monitor_fault_status(target_date)
+
+            if success:
+                print("✅ 故障状态监控完成")
+            else:
+                print("⚠️ 故障状态监控失败")
+
+        except Exception as e:
+            self.log(f"发送故障状态通知失败: {e}", "ERROR")
+            print(f"⚠️ 邮件通知执行失败: {e}")
 
 
 def main():

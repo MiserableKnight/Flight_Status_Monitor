@@ -4,11 +4,12 @@
 
 功能：
 - 读取每日故障数据
-- 生成故障汇总信息
+- 读取航班起降时间数据
+- 生成故障汇总信息（含时间背景）
 - 发送故障邮件通知（每天一次）
 """
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import sys
 import hashlib
@@ -29,30 +30,219 @@ config_loader = load_config()
 gmail_config = config_loader.get_gmail_config()
 
 
-def generate_fault_summary(df, target_date):
+def parse_time_str(time_str):
+    """
+    解析时间字符串为 datetime.time 对象
+
+    支持两种格式：
+    - HH:MM:SS（完整时间）
+    - HH:MM（只有小时和分钟，秒默认为0）
+
+    Args:
+        time_str: 时间字符串，格式如 "10:17:50" 或 "10:17" 或 "2026-01-13 10:17:50"
+
+    Returns:
+        datetime.time 对象，解析失败返回 None
+    """
+    if pd.isna(time_str) or not time_str:
+        return None
+
+    # 如果包含日期，只取时间部分
+    if isinstance(time_str, str) and ' ' in time_str:
+        time_str = time_str.split(' ')[-1]
+
+    try:
+        # 解析时间 HH:MM:SS 或 HH:MM
+        parts = str(time_str).split(':')
+        if len(parts) == 3:
+            # HH:MM:SS 格式
+            hour, minute, second = int(parts[0]), int(parts[1]), int(parts[2])
+            # 验证时间有效性
+            if 0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59:
+                return datetime.strptime(time_str, '%H:%M:%S').time()
+        elif len(parts) == 2:
+            # HH:MM 格式，秒默认为0
+            hour, minute = int(parts[0]), int(parts[1])
+            # 验证时间有效性
+            if 0 <= hour <= 23 and 0 <= minute <= 59:
+                return datetime.strptime(f"{time_str}:00", '%H:%M:%S').time()
+        return None
+    except:
+        return None
+
+
+def calculate_time_context(fault_time_str, flight_times):
+    """
+    计算故障时间相对于航班关键时间点的时间差
+
+    逻辑：
+    1. 将故障时间与航班的 OUT/OFF/ON/IN 四个时间点排序
+    2. 找到故障时间在时间轴上的位置：
+       - 在 OFF 之后，ON 之前 → "起飞后X分钟"
+       - 在 ON 之后，IN 之前 → "降落后X分钟"
+       - 在 IN 之后 → "滑入后X分钟"
+       - 在 OUT 之前 → "滑出前X分钟"
+
+    Args:
+        fault_time_str: 故障发生时间字符串
+        flight_times: 航班关键时间点字典 {'OUT': time, 'OFF': time, 'ON': time, 'IN': time}
+
+    Returns:
+        str: 时间背景描述，如 "起飞后15分钟"
+    """
+    fault_time = parse_time_str(fault_time_str)
+    if not fault_time:
+        return None
+
+    # 解析航班关键时间点
+    times = {}
+    for key, time_str in flight_times.items():
+        t = parse_time_str(time_str)
+        if t:
+            times[key] = t
+
+    if not times:
+        return None
+
+    # 定义时间点顺序
+    time_events = [
+        ('OUT', '滑出'),
+        ('OFF', '起飞'),
+        ('ON', '降落'),
+        ('IN', '滑入')
+    ]
+
+    # 将故障时间转换为分钟数（从0:00开始）
+    fault_minutes = fault_time.hour * 60 + fault_time.minute + fault_time.second / 60
+
+    # 找到故障时间在时间轴上的位置
+    # 按顺序检查每个时间点，找到故障时间所在的区间
+    last_event_key = None
+    last_event_time = None
+    last_event_name = None
+
+    for event_key, event_name in time_events:
+        if event_key not in times:
+            continue
+
+        event_time = times[event_key]
+        event_minutes = event_time.hour * 60 + event_time.minute + event_time.second / 60
+
+        # 如果故障时间在这个时间点之后，更新为最后一个时间点
+        if fault_minutes >= event_minutes:
+            last_event_key = event_key
+            last_event_time = event_time
+            last_event_name = event_name
+        else:
+            # 故障时间在这个时间点之前，停止查找
+            break
+
+    if last_event_name and last_event_time:
+        # 计算时间差
+        last_minutes = last_event_time.hour * 60 + last_event_time.minute + last_event_time.second / 60
+        diff_minutes = fault_minutes - last_minutes
+
+        # 计算分钟数（四舍五入）
+        minutes = int(round(diff_minutes))
+
+        if minutes == 0:
+            return f"{last_event_name}时"
+        elif minutes < 60:
+            return f"{last_event_name}后{minutes}分钟"
+        else:
+            hours = minutes // 60
+            remain_minutes = minutes % 60
+            if remain_minutes == 0:
+                return f"{last_event_name}后{hours}小时"
+            else:
+                return f"{last_event_name}后{hours}小时{remain_minutes}分钟"
+    elif 'OUT' in times:
+        # 如果故障时间在所有时间点之前，相对于滑出时间
+        out_time = times['OUT']
+        out_minutes = out_time.hour * 60 + out_time.minute + out_time.second / 60
+        diff_minutes = out_minutes - fault_minutes
+
+        minutes = int(round(diff_minutes))
+        if minutes == 0:
+            return "滑出时"
+        elif minutes < 60:
+            return f"滑出前{minutes}分钟"
+        else:
+            hours = minutes // 60
+            remain_minutes = minutes % 60
+            if remain_minutes == 0:
+                return f"滑出前{hours}小时"
+            else:
+                return f"滑出前{hours}小时{remain_minutes}分钟"
+
+    return None
+
+
+def load_flight_times(target_date):
+    """
+    加载航班起降时间数据
+
+    Args:
+        target_date: 目标日期字符串
+
+    Returns:
+        dict: {(机号, 航班号): {'OUT': time, 'OFF': time, 'ON': time, 'IN': time}}
+    """
+    leg_file = os.path.join(project_root, 'data', 'daily_raw', f'leg_data_{target_date}.csv')
+
+    if not os.path.exists(leg_file):
+        log(f"航班数据文件不存在: {leg_file}", "WARNING")
+        return {}
+
+    try:
+        # 读取CSV文件
+        try:
+            df = pd.read_csv(leg_file, encoding='utf-8-sig')
+        except:
+            df = pd.read_csv(leg_file, encoding='gbk')
+
+        flight_times = {}
+
+        for _, row in df.iterrows():
+            key = (row['执飞飞机'], row['航班号'])
+            flight_times[key] = {
+                'OUT': row.get('OUT', ''),
+                'OFF': row.get('OFF', ''),
+                'ON': row.get('ON', ''),
+                'IN': row.get('IN', '')
+            }
+
+        log(f"成功加载 {len(flight_times)} 条航班时间数据")
+        return flight_times
+
+    except Exception as e:
+        log(f"读取航班数据失败: {e}", "ERROR")
+        return {}
+
+
+def generate_fault_summary(df, target_date, flight_times_dict=None):
     """
     生成故障汇总信息
 
     Args:
         df: 故障数据DataFrame
         target_date: 目标日期
+        flight_times_dict: 航班时间数据字典 {(机号, 航班号): {'OUT': ..., 'OFF': ..., 'ON': ..., 'IN': ...}}
 
     Returns:
         str: 故障汇总文本
     """
     if df.empty:
-        return f"故障信息汇总 - {target_date}\n{'='*40}\n\n今日无故障记录\n"
+        return "今日无故障记录\n"
+
+    # 如果没有提供航班时间数据，尝试加载
+    if flight_times_dict is None:
+        flight_times_dict = load_flight_times(target_date)
 
     # 按飞机分组
     aircraft_groups = df.groupby('机号')
 
-    summary_lines = [
-        f"故障信息汇总 - {target_date}",
-        "="*40,
-        ""
-    ]
-
-    total_faults = 0
+    summary_lines = []
 
     for aircraft_num, group in aircraft_groups:
         summary_lines.append(f"{aircraft_num}:")
@@ -68,20 +258,41 @@ def generate_fault_summary(df, target_date):
             flight_line = f"  {flight_num}:"
             fault_lines = []
 
+            # 获取该航班的时间数据
+            flight_key = (aircraft_num, flight_num)
+            flight_times = flight_times_dict.get(flight_key, {})
+
             for fault in faults:
-                total_faults += 1
                 trigger_time = fault['触发_time'] if '触发_time' in fault else fault.get('触发时间', '')
+
+                # 只保留时间部分（去除日期）
+                if ' ' in trigger_time:
+                    # 格式如 "2026-01-13 10:17:50"，只取时间部分
+                    time_part = trigger_time.split(' ')[-1]
+                else:
+                    time_part = trigger_time
 
                 # 格式化故障描述
                 description = fault.get('描述', '')
                 fault_type = fault.get('故障类型', '')
                 phase = fault.get('飞行阶段', '')
 
-                # 简化显示：只显示时间和描述
+                # 计算时间背景
+                time_context = None
+                if flight_times:
+                    time_context = calculate_time_context(trigger_time, flight_times)
+
+                # 构建故障行
+                base_info = f"    - {description} ({time_part}"
                 if phase:
-                    fault_lines.append(f"    - {description} ({trigger_time}, {phase})")
+                    base_info += f", {phase}"
+                base_info += ")"
+
+                # 添加时间背景信息
+                if time_context:
+                    fault_lines.append(f"{base_info} [{time_context}]")
                 else:
-                    fault_lines.append(f"    - {description} ({trigger_time})")
+                    fault_lines.append(base_info)
 
             if fault_lines:
                 summary_lines.append(flight_line)
@@ -90,11 +301,6 @@ def generate_fault_summary(df, target_date):
                     summary_lines.append(f"    ... (还有{len(fault_lines)-10}条)")
 
         summary_lines.append("")
-
-    summary_lines.extend([
-        "-"*40,
-        f"共计: {total_faults}条故障记录"
-    ])
 
     return '\n'.join(summary_lines)
 
@@ -105,10 +311,11 @@ def monitor_fault_status(target_date=None):
 
     逻辑：
     1. 读取当日故障数据
-    2. 生成故障汇总
-    3. 对比上次邮件状态哈希
-    4. 只有数据变化才发送邮件
-    5. 发送成功后保存当前状态
+    2. 读取航班起降时间数据
+    3. 生成故障汇总（含时间背景）
+    4. 对比上次邮件状态哈希
+    5. 只有数据变化才发送邮件
+    6. 发送成功后保存当前状态
 
     Args:
         target_date: 目标日期（YYYY-MM-DD格式），默认为今天
@@ -145,9 +352,17 @@ def monitor_fault_status(target_date=None):
         log(f"Failed to read data: {e}", "ERROR")
         return False
 
+    # 加载航班时间数据
+    print("\n✈️ 加载航班时间数据...")
+    flight_times = load_flight_times(target_date)
+    if flight_times:
+        print(f"   ✅ 成功加载 {len(flight_times)} 条航班时间记录")
+    else:
+        print(f"   ⚠️ 未找到航班时间数据，邮件将不包含时间背景信息")
+
     # 生成故障汇总
     print("\n📊 生成故障汇总...")
-    fault_summary = generate_fault_summary(df, target_date)
+    fault_summary = generate_fault_summary(df, target_date, flight_times)
 
     # 生成当前数据的唯一标识（用于对比）
     current_hash = hashlib.md5(
@@ -182,8 +397,8 @@ def monitor_fault_status(target_date=None):
     notifier = FaultStatusNotifier(config_dict=gmail_config)
 
     if notifier.is_enabled():
-        # 准备附件路径
-        attachment = daily_file if os.path.exists(daily_file) else None
+        # 不发送附件，只发送邮件内容
+        attachment = None
 
         if notifier.send_fault_status_notification(fault_summary, target_date, attachment):
             print(f"   ✅ 已发送故障汇总邮件")

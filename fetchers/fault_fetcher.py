@@ -712,9 +712,66 @@ class FaultFetcher(BaseFetcher):
             traceback.print_exc()
             return None
 
+    def normalize_flight_number(self, flight_num):
+        """
+        统一航班号格式，将EU改为VJ
+
+        Args:
+            flight_num: 原始航班号
+
+        Returns:
+            str: 标准化后的航班号
+        """
+        if not flight_num or flight_num == '':
+            return flight_num
+
+        flight_num = str(flight_num).strip().upper()
+        # 移除EU和VJ前缀
+        match = flight_num.replace('EU', '').replace('VJ', '')
+
+        if match.isdigit():
+            return f'VJ{match}'
+        return flight_num
+
+    def clean_time_field(self, time_str):
+        """
+        清理时间字段，移除日期部分，只保留时间
+
+        Args:
+            time_str: 原始时间字符串，可能包含日期
+
+        Returns:
+            str: 只包含时间部分的字符串（HH:MM:SS）
+        """
+        if not time_str or time_str == '':
+            return time_str
+
+        time_str = str(time_str).strip()
+
+        # 如果包含空格，取时间部分（空格后的部分）
+        if ' ' in time_str:
+            return time_str.split(' ')[-1]
+
+        # 如果包含斜杠，取时间部分（斜杠后的部分）
+        if '/' in time_str:
+            parts = time_str.split('/')
+            if len(parts) > 2:
+                # 格式如 "2026/1/13 10:17:50" 或 "2026/1/13 10:17:50"
+                time_part = parts[-1]
+                if ' ' in time_part:
+                    return time_part.split(' ')[-1]
+                return time_part
+
+        return time_str
+
     def save_to_csv(self, data, filename=None):
         """
         保存故障数据到CSV文件
+
+        优化：
+        1. 删除FlightlegId和ReportId列
+        2. 清理时间字段（移除日期部分）
+        3. 标准化航班号（EU改为VJ）
 
         Args:
             data: 故障数据列表
@@ -738,11 +795,11 @@ class FaultFetcher(BaseFetcher):
 
             file_path = data_dir / filename
 
-            # 定义字段顺序（按照实际页面表头）
+            # 定义字段顺序（已删除FlightlegId和ReportId）
             fieldnames = [
                 '获取时间', '机号', '机型', '航空公司', '航班号',
                 'ATA', '航段', '触发时间', '描述', '故障类型',
-                '飞行阶段', '处理状态', '类别-优先权', 'FlightlegId', 'ReportId'
+                '飞行阶段', '处理状态', '类别-优先权'
             ]
 
             # 写入CSV文件（覆盖模式）
@@ -752,25 +809,23 @@ class FaultFetcher(BaseFetcher):
                 # 写入表头
                 writer.writeheader()
 
-                # 写入数据行，进行字段映射
+                # 写入数据行，进行字段映射和数据清理
                 for row in data:
                     # 字段映射：原始字段名 -> 实际表头字段名
                     row_data = {
-                        '获取时间': row.get('提取时间', ''),
+                        '获取时间': self.clean_time_field(row.get('提取时间', '')),
                         '机号': row.get('机号', ''),
                         '机型': row.get('机型', ''),
                         '航空公司': row.get('航空公司', ''),
-                        '航班号': row.get('航班号', ''),
+                        '航班号': self.normalize_flight_number(row.get('航班号', '')),
                         'ATA': row.get('ATA章节', ''),
                         '航段': row.get('航段', ''),
-                        '触发时间': row.get('时间', ''),
+                        '触发时间': self.clean_time_field(row.get('时间', '')),
                         '描述': row.get('故障描述', ''),
                         '故障类型': row.get('故障类型', ''),
                         '飞行阶段': row.get('阶段', ''),
                         '处理状态': row.get('状态', ''),
-                        '类别-优先权': '',  # 暂时为空
-                        'FlightlegId': row.get('FlightlegId', ''),
-                        'ReportId': row.get('ReportId', '')
+                        '类别-优先权': ''  # 暂时为空
                     }
                     writer.writerow(row_data)
 

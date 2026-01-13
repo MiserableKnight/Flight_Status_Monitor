@@ -33,6 +33,12 @@ Thumbs.db
 # Data files (根据需要调整)
 data/*.xlsx
 data/*.csv
+data/*.json
+data/daily_raw/
+
+# Claude Code 本地配置
+.claude/
+.claude/settings.local.json
 
 # 测试和覆盖率
 .pytest_cache/

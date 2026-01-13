@@ -104,8 +104,6 @@ class FaultParser:
                 return unescape(match.group(1)) if match else ""
 
             # 从隐藏域提取
-            data['FlightlegId'] = get_hidden_val('rtmFlightlegId')
-            data['ReportId'] = get_hidden_val('rtmReportId')
             data['故障类型'] = get_hidden_val('faultType')
             data['时间'] = get_hidden_val('messageTime')
 
@@ -120,12 +118,14 @@ class FaultParser:
                 content = re.sub(r'<[^>]+>', '', raw_html)
                 return unescape(content).replace('&nbsp;', '').strip()
 
-            if len(li_contents) >= 11:
+            if len(li_contents) >= 14:
                 data['机型'] = clean_html(li_contents[1])
                 data['航空公司'] = clean_html(li_contents[2])
                 data['航班号'] = clean_html(li_contents[3])
-                data['航段'] = clean_html(li_contents[4])
-                data['故障码'] = clean_html(li_contents[5])
+                # li[4]: ATA章节
+                data['ATA章节'] = clean_html(li_contents[4])
+                # li[5]: 航段
+                data['航段'] = clean_html(li_contents[5])
                 # li_contents[6] 是时间
 
                 # 故障描述（从title属性获取完整内容）
@@ -135,13 +135,27 @@ class FaultParser:
                 data['阶段'] = clean_html(li_contents[8])
                 # li_contents[9] 通常是空的
                 data['状态'] = clean_html(li_contents[10])
+                # li_contents[11] 通常是空的
+                # li_contents[12] 历史记录（不需要）
+                # li[13]: 类别-优先权（最后一个li，宽度7%）
+                data['类别-优先权'] = clean_html(li_contents[13])
+            elif len(li_contents) >= 11:
+                # 兼容旧版本HTML结构
+                data['机型'] = clean_html(li_contents[1])
+                data['航空公司'] = clean_html(li_contents[2])
+                data['航班号'] = clean_html(li_contents[3])
+                data['ATA章节'] = clean_html(li_contents[4])
+                data['航段'] = clean_html(li_contents[5])
+                # li_contents[6] 是时间
 
-                # ATA章节（倒数第二个li，7%宽度）
-                ata_match = re.findall(r'<li[^>]*style="width:7%;">(.*?)</li>', row_html, re.DOTALL)
-                if len(ata_match) >= 2:
-                    data['ATA章节'] = clean_html(ata_match[1])  # 取最后一个7%的li
-                else:
-                    data['ATA章节'] = ""
+                # 故障描述（从title属性获取完整内容）
+                desc_match = re.search(r'<a[^>]*title="([^"]*)"', li_contents[7])
+                data['故障描述'] = unescape(desc_match.group(1)) if desc_match else clean_html(li_contents[7])
+
+                data['阶段'] = clean_html(li_contents[8])
+                # li_contents[9] 通常是空的
+                data['状态'] = clean_html(li_contents[10])
+                data['类别-优先权'] = ""
 
             # 添加提取时间
             data['提取时间'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

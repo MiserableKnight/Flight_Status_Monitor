@@ -138,7 +138,7 @@ class FaultDataSaver:
                         '故障类型': row.get('故障类型', ''),
                         '飞行阶段': row.get('阶段', ''),
                         '处理状态': row.get('状态', ''),
-                        '类别-优先权': ''  # 暂时为空
+                        '类别-优先权': row.get('类别-优先权', '')
                     }
                     writer.writerow(row_data)
 

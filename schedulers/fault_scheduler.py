@@ -4,7 +4,7 @@
 
 专门管理故障数据的监控：
 - 连接端口 9333
-- 每5分钟检查一次
+- 每分钟检查一次
 - 独立循环运行
 - 支持依赖注入
 """
@@ -199,12 +199,12 @@ class FaultScheduler(BaseScheduler):
 
     def get_check_interval(self) -> timedelta:
         """
-        获取检查间隔（每5分钟）
+        获取检查间隔（每分钟）
 
         Returns:
-            timedelta: 5分钟
+            timedelta: 1分钟
         """
-        return timedelta(minutes=5)
+        return timedelta(minutes=1)
 
     def _load_last_fault_count(self, target_date: str) -> int:
         """

@@ -23,9 +23,17 @@ from core.logger import get_logger
 from core.fault_status_notifier import FaultStatusNotifier
 from config.config_loader import load_config
 from config.flight_phase_mapping import get_phase_name, get_fault_type_name, get_phase_name_without_suffix
+from config.flight_schedule import FlightSchedule
 
 # 初始化日志
 log = get_logger()
+
+# 机场代码到城市名称的映射
+AIRPORT_TO_CITY = {
+    'VVNB': '河内',
+    'VVTS': '胡志明',
+    'VVCS': '昆岛'
+}
 
 # 加载统一配置
 config_loader = load_config()
@@ -213,15 +221,81 @@ def clean_description(description: str) -> str:
     return cleaned.strip()
 
 
+def extract_city_name(airport_str):
+    """
+    从机场字符串中提取城市名称
+
+    Args:
+        airport_str: 机场字符串，格式如 "VVTS-新山一国际机场" 或 "VVTS"
+
+    Returns:
+        str: 城市名称，如 "胡志明"
+    """
+    if not airport_str:
+        return None
+
+    # 如果包含"-"，提取机场代码部分
+    if '-' in airport_str:
+        airport_code = airport_str.split('-')[0].strip()
+    else:
+        airport_code = airport_str.strip()
+
+    # 映射到城市名称
+    return AIRPORT_TO_CITY.get(airport_code)
+
+
+def get_route_pair(flight_num, departure_airport_str, arrival_airport_str):
+    """
+    获取城市对字符串
+
+    优先从实际机场数据中提取，如果失败则从配置文件中获取
+
+    Args:
+        flight_num: 航班号
+        departure_airport_str: 起飞机场字符串
+        arrival_airport_str: 着陆机场字符串
+
+    Returns:
+        str: 城市对字符串，如 "河内-昆岛"，如果获取失败返回 None
+    """
+    # 尝试从实际机场数据中提取
+    dep_city = extract_city_name(departure_airport_str)
+    arr_city = extract_city_name(arrival_airport_str)
+
+    if dep_city and arr_city:
+        return f"{dep_city}-{arr_city}"
+
+    # 如果实际数据无法获取，尝试从配置文件获取
+    flight_info = FlightSchedule.get_flight_info(flight_num)
+    if flight_info and 'route' in flight_info:
+        route = flight_info['route']
+        # route 格式如 "HAN-VCS"，需要转换为中文城市名
+        parts = route.split('-')
+        if len(parts) == 2:
+            # 机场代码到城市名的映射
+            city_map = {
+                'HAN': '河内',
+                'SGN': '胡志明',
+                'VCS': '昆岛'
+            }
+            dep = city_map.get(parts[0])
+            arr = city_map.get(parts[1])
+            if dep and arr:
+                return f"{dep}-{arr}"
+
+    return None
+
+
 def load_flight_times(target_date):
     """
-    加载航班起降时间数据
+    加载航班起降时间数据和机场信息
 
     Args:
         target_date: 目标日期字符串
 
     Returns:
-        dict: {(机号, 航班号): {'OUT': time, 'OFF': time, 'ON': time, 'IN': time}}
+        dict: {(机号, 航班号): {'OUT': time, 'OFF': time, 'ON': time, 'IN': time,
+                                'departure_airport': str, 'arrival_airport': str}}
     """
     leg_file = os.path.join(project_root, 'data', 'daily_raw', f'leg_data_{target_date}.csv')
 
@@ -244,7 +318,9 @@ def load_flight_times(target_date):
                 'OUT': row.get('OUT', ''),
                 'OFF': row.get('OFF', ''),
                 'ON': row.get('ON', ''),
-                'IN': row.get('IN', '')
+                'IN': row.get('IN', ''),
+                'departure_airport': row.get('起飞机场', ''),
+                'arrival_airport': row.get('着陆机场', '')
             }
 
         log(f"成功加载 {len(flight_times)} 条航班时间数据")
@@ -282,20 +358,63 @@ def generate_fault_summary(df, target_date, flight_times_dict=None):
     for aircraft_num, group in aircraft_groups:
         summary_lines.append(f"{aircraft_num}:")
 
-        # 按航班号分组
+        # 按航班号分组，并收集每个航班的最新故障时间
         flight_groups = group.groupby('航班号')
 
+        # 收集每个航班的故障数据和最新故障时间
+        flights_data = []
         for flight_num, flight_group in flight_groups:
-            # 转换为列表并按触发时间排序
+            # 转换为列表并按触发时间排序（倒序）
             faults = flight_group.to_dict('records')
             faults.sort(key=lambda x: x['触发时间'], reverse=True)
 
-            flight_line = f"  {flight_num}:"
-            fault_lines = []
+            # 获取该航班的最新故障时间（第一个故障的时间）
+            latest_fault_time = faults[0]['触发时间'] if faults else ''
 
             # 获取该航班的时间数据
             flight_key = (aircraft_num, flight_num)
-            flight_times = flight_times_dict.get(flight_key, {})
+            flight_data = flight_times_dict.get(flight_key, {})
+
+            flights_data.append({
+                'flight_num': flight_num,
+                'faults': faults,
+                'flight_data': flight_data,
+                'latest_fault_time': latest_fault_time
+            })
+
+        # 按照最新故障时间倒序排列航班（最新故障的航班在最上面）
+        flights_data.sort(key=lambda x: x['latest_fault_time'], reverse=True)
+
+        # 处理排序后的航班
+        for flight_info in flights_data:
+            flight_num = flight_info['flight_num']
+            faults = flight_info['faults']
+            flight_data = flight_info['flight_data']
+
+            # 获取城市对信息
+            route_pair = None
+            if flight_data:
+                route_pair = get_route_pair(
+                    flight_num,
+                    flight_data.get('departure_airport', ''),
+                    flight_data.get('arrival_airport', '')
+                )
+
+            # 构建航班行，包含城市对
+            if route_pair:
+                flight_line = f"  {flight_num}（{route_pair}）:"
+            else:
+                flight_line = f"  {flight_num}:"
+
+            fault_lines = []
+
+            # 提取时间数据（用于计算时间背景）
+            flight_times = {
+                'OUT': flight_data.get('OUT', ''),
+                'OFF': flight_data.get('OFF', ''),
+                'ON': flight_data.get('ON', ''),
+                'IN': flight_data.get('IN', '')
+            }
 
             for fault in faults:
                 trigger_time = fault['触发_time'] if '触发_time' in fault else fault.get('触发时间', '')
@@ -325,7 +444,7 @@ def generate_fault_summary(df, target_date, flight_times_dict=None):
                 if flight_times:
                     time_context = calculate_time_context(trigger_time, flight_times)
 
-                # 构建故障行 - 新格式：滑入阶段（降落后1分钟），有CAS信息：ENG NO TAKEOFF DATA
+                # 构建故障行 - 新格式：滑入阶段（降落后1分钟），有CAS：ENG NO TAKEOFF DATA
                 fault_line_parts = []
 
                 # 添加飞行阶段和时间背景

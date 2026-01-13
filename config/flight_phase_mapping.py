@@ -33,8 +33,8 @@ PHASE_MAPPING = {**RTMU_PHASE_MAPPING, **CMS_PHASE_MAPPING}
 
 # 故障类型映射
 FAULT_TYPE_MAPPING = {
-    'MMSG': 'CMS信息',
-    'FDE': 'CAS信息'
+    'MMSG': 'CMS',
+    'FDE': 'CAS'
 }
 
 
@@ -46,13 +46,13 @@ def get_fault_type_name(fault_type_code: str) -> str:
         fault_type_code: 故障类型缩写（如 'MMSG', 'FDE' 等）
 
     Returns:
-        str: 中文类型名称（如 'CMS信息'），如果找不到映射则返回原代码
+        str: 中文类型名称（如 'CMS'），如果找不到映射则返回原代码
 
     Examples:
         >>> get_fault_type_name('MMSG')
-        'CMS信息'
+        'CMS'
         >>> get_fault_type_name('FDE')
-        'CAS信息'
+        'CAS'
         >>> get_fault_type_name('UNKNOWN')
         'UNKNOWN'
     """

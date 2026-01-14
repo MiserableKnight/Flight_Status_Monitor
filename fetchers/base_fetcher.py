@@ -26,6 +26,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 from core.logger import get_logger
+from config.config_loader import ConfigLoader
 
 
 class BaseFetcher(ABC):
@@ -129,28 +130,24 @@ class BaseFetcher(ABC):
         self._load_config()
 
     def _load_config(self):
-        """加载配置文件"""
-        config = configparser.ConfigParser()
-        if not os.path.exists(self.config_file):
-            raise FileNotFoundError(f"❌ 配置文件不存在: {self.config_file}")
-
-        config.read(self.config_file, encoding='utf-8')
+        """加载配置文件（优先从环境变量读取敏感配置）"""
+        # 使用统一的配置加载器（自动从环境变量和 config.ini 加载）
+        config_loader = ConfigLoader(self.config_file)
 
         try:
             self.cfg = {
-                'username': config.get('credentials', 'username'),
-                'password': config.get('credentials', 'password'),
-                'user_data_path': config.get('paths', 'user_data_path'),
-                'target_url': config.get('target', 'url')
+                'username': config_loader.get_credentials()['username'],
+                'password': config_loader.get_credentials()['password'],
+                'user_data_path': config_loader.get_paths()['user_data_path'],
+                'target_url': config_loader.get_target_url()
             }
             self.user_data_path = self.cfg['user_data_path']
         except Exception as e:
             raise ValueError(f"配置文件缺失: {e}")
 
         # 读取飞机号列表
-        if config.has_section('aircraft') and config.has_option('aircraft', 'aircraft_list'):
-            aircraft_list_str = config.get('aircraft', 'aircraft_list')
-            self.aircraft_list = [x.strip() for x in aircraft_list_str.split(',')]
+        self.aircraft_list = config_loader.get_aircraft_list()
+        if self.aircraft_list:
             print(f"✅ 读取到 {len(self.aircraft_list)} 架飞机: {', '.join(self.aircraft_list)}")
         else:
             print("⚠️ 配置文件中未找到飞机号列表,使用默认值")
@@ -461,7 +458,7 @@ class BaseFetcher(ABC):
                             print(f"   ✅ 找到账号输入框")
                             user_ele.clear()
                             user_ele.input(self.cfg['username'])
-                            print(f"   📝 账号已填写: {self.cfg['username']}")
+                            print(f"   📝 账号已填写")  # 不再打印具体账号信息
                             try:
                                 page.ele('text:FLYWIN').click(by_js=True)
                             except:

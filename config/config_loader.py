@@ -2,14 +2,30 @@
 """
 统一配置加载模块
 提供系统各模块的配置加载接口
+
+敏感配置说明：
+- 敏感配置（登录凭证、Gmail密码等）优先从环境变量读取
+- 环境变量未配置时，fallback 到 config.ini（但不推荐）
+- 参考 .env.template 文件了解需要配置哪些环境变量
 """
 import configparser
 import os
-from typing import Dict, Any, List
+from pathlib import Path
+from typing import Dict, Any, List, Optional
 
 
 class ConfigLoader:
-    """配置加载器类"""
+    """配置加载器类（支持环境变量优先）"""
+
+    # 环境变量映射
+    ENV_MAPPING = {
+        'username': 'SYSTEM_USERNAME',
+        'password': 'SYSTEM_PASSWORD',
+        'sender_email': 'GMAIL_SENDER_EMAIL',
+        'app_password': 'GMAIL_APP_PASSWORD',
+        'recipients': 'GMAIL_RECIPIENTS',
+        'sender_name': 'GMAIL_SENDER_NAME',
+    }
 
     def __init__(self, config_file: str = None):
         """
@@ -24,26 +40,82 @@ class ConfigLoader:
             config_file = os.path.join(project_root, 'config', 'config.ini')
 
         self.config_file = config_file
+
+        # 先加载 .env 文件到环境变量
+        self._load_env()
+
+        # 再加载 config.ini
         self.config = configparser.ConfigParser()
         self._load_config()
 
+    def _load_env(self):
+        """从项目根目录加载 .env 文件到环境变量"""
+        project_root = Path(__file__).parent.parent
+        env_file = project_root / '.env'
+
+        if env_file.exists():
+            with open(env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    # 跳过注释和空行
+                    if not line or line.startswith('#'):
+                        continue
+                    # 解析 KEY=VALUE 格式
+                    if '=' in line:
+                        key, value = line.split('=', 1)
+                        os.environ[key.strip()] = value.strip()
+
     def _load_config(self):
         """加载配置文件"""
-        if not os.path.exists(self.config_file):
-            raise FileNotFoundError(f"❌ 配置文件不存在: {self.config_file}")
+        if os.path.exists(self.config_file):
+            self.config.read(self.config_file, encoding='utf-8')
+        # 配置文件不存在时不报错，依赖环境变量
 
-        self.config.read(self.config_file, encoding='utf-8')
+    def _get_value(self, section: str, key: str, fallback: Any = None) -> Optional[str]:
+        """
+        获取配置值（优先从环境变量读取）
+
+        优先级: 环境变量 > config.ini > fallback
+
+        Args:
+            section: 配置节名
+            key: 配置键名
+            fallback: 默认值
+
+        Returns:
+            配置值
+        """
+        # 检查是否有对应的环境变量
+        composite_key = f"{section}.{key}"
+        if composite_key in self.ENV_MAPPING:
+            env_value = os.environ.get(self.ENV_MAPPING[composite_key])
+            if env_value:
+                return env_value
+
+        # 尝试从 config.ini 读取
+        if self.config.has_section(section) and self.config.has_option(section, key):
+            return self.config.get(section, key)
+
+        return fallback
 
     def get_credentials(self) -> Dict[str, str]:
         """
-        获取登录凭证
+        获取登录凭证（优先从环境变量读取）
 
         Returns:
             Dict[str, str]: {'username': 'xxx', 'password': 'xxx'}
         """
+        username = os.environ.get('SYSTEM_USERNAME') or ''
+        password = os.environ.get('SYSTEM_PASSWORD') or ''
+
+        if not username:
+            print("⚠️  警告: SYSTEM_USERNAME 环境变量未配置")
+        if not password:
+            print("⚠️  警告: SYSTEM_PASSWORD 环境变量未配置")
+
         return {
-            'username': self.config.get('credentials', 'username'),
-            'password': self.config.get('credentials', 'password')
+            'username': username,
+            'password': password
         }
 
     def get_paths(self) -> Dict[str, str]:
@@ -53,9 +125,8 @@ class ConfigLoader:
         Returns:
             Dict[str, str]: {'user_data_path': 'xxx'}
         """
-        return {
-            'user_data_path': self.config.get('paths', 'user_data_path')
-        }
+        user_data_path = self._get_value('paths', 'user_data_path', '')
+        return {'user_data_path': user_data_path}
 
     def get_target_url(self) -> str:
         """
@@ -64,7 +135,7 @@ class ConfigLoader:
         Returns:
             str: 首页URL
         """
-        return self.config.get('target', 'url')
+        return self._get_value('target', 'url', '')
 
     def get_aircraft_list(self) -> List[str]:
         """
@@ -126,7 +197,7 @@ class ConfigLoader:
 
     def get_gmail_config(self) -> Dict[str, str]:
         """
-        获取Gmail配置（统一邮件配置源）
+        获取Gmail配置（优先从环境变量读取）
 
         Returns:
             Dict[str, str]: Gmail配置字典，包含:
@@ -135,20 +206,26 @@ class ConfigLoader:
                 - recipients: 收件人列表
                 - sender_name: 发件人显示名称
         """
-        if not self.config.has_section('gmail'):
-            return {}
+        sender_email = os.environ.get('GMAIL_SENDER_EMAIL') or ''
+        app_password = os.environ.get('GMAIL_APP_PASSWORD') or ''
+        sender_name = os.environ.get('GMAIL_SENDER_NAME') or '航班监控系统'
+        recipients_str = os.environ.get('GMAIL_RECIPIENTS') or ''
 
-        config = {}
-        section = self.config['gmail']
+        recipients = [r.strip() for r in recipients_str.split(',') if r.strip()]
 
-        config['sender_email'] = section.get('sender_email', '')
-        config['app_password'] = section.get('app_password', '')
-        config['sender_name'] = section.get('sender_name', '航班监控系统')
+        if not sender_email:
+            print("⚠️  警告: GMAIL_SENDER_EMAIL 环境变量未配置")
+        if not app_password:
+            print("⚠️  警告: GMAIL_APP_PASSWORD 环境变量未配置")
+        if not recipients:
+            print("⚠️  警告: GMAIL_RECIPIENTS 环境变量未配置")
 
-        recipients = section.get('recipients', '')
-        config['recipients'] = [r.strip() for r in recipients.split(',') if r.strip()]
-
-        return config
+        return {
+            'sender_email': sender_email,
+            'app_password': app_password,
+            'sender_name': sender_name,
+            'recipients': recipients
+        }
 
     def get_all_config(self) -> Dict[str, Any]:
         """
@@ -202,7 +279,7 @@ if __name__ == "__main__":
     print("\n🔑 登录凭证:")
     creds = loader.get_credentials()
     print(f"  用户名: {creds['username']}")
-    print(f"  密码: {'*' * len(creds['password'])}")
+    print(f"  密码: {'*' * len(creds['password']) if creds['password'] else '未配置'}")
 
     print("\n📁 路径配置:")
     paths = loader.get_paths()
@@ -228,5 +305,12 @@ if __name__ == "__main__":
     print(f"  结束时间: {scheduler['end_time']}")
     print(f"  航班数据抓取时间: {', '.join(scheduler['flight_fetch_times'])}")
     print(f"  故障数据抓取时间: {', '.join(scheduler['faults_fetch_times'])}")
+
+    print("\n📧 Gmail配置:")
+    gmail = loader.get_gmail_config()
+    print(f"  发件人邮箱: {gmail['sender_email']}")
+    print(f"  应用密码: {'已配置' if gmail['app_password'] else '未配置'}")
+    print(f"  收件人: {', '.join(gmail['recipients']) if gmail['recipients'] else '未配置'}")
+    print(f"  发件人名称: {gmail['sender_name']}")
 
     print("\n✅ 测试完成")

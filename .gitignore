@@ -3,6 +3,7 @@ logs/
 *.log
 
 # 敏感配置文件
+.env
 config/config.ini
 
 # Python

@@ -180,7 +180,7 @@ class FaultStatusNotifier:
             print(f"❌ 邮件发送失败: {e}")
             return False
 
-    def send_fault_status_notification(self, fault_summary: str, date_str: str, attachment: str = None) -> bool:
+    def send_fault_status_notification(self, fault_summary: str, date_str: str, attachment: str = None, subject_prefix: str = "") -> bool:
         """
         发送故障状态通知
 
@@ -188,11 +188,12 @@ class FaultStatusNotifier:
             fault_summary: 故障汇总信息
             date_str: 日期字符串
             attachment: 附件文件路径（可选）
+            subject_prefix: 主题前缀（可选），用于标记测试邮件等
 
         Returns:
             bool: 发送是否成功
         """
-        subject = f"故障信息报送 - {date_str}"
+        subject = f"{subject_prefix}故障信息报送 - {date_str}" if subject_prefix else f"故障信息报送 - {date_str}"
 
         attachments = [attachment] if attachment else None
 

@@ -151,7 +151,7 @@ def get_flight_sequence_sorted(df_aircraft):
     从飞机数据中获取按计划时间排序的航班序列
 
     ⚠️ 重要修复: 使用航线链完整性检测
-    - 根据实际执行的航班判断所属航线链
+    - 根据系统显示的航班判断所属航线链
     - 返回完整的航线链序列,而不是仅返回已出现的航班
     - 只有完成航线链的最后一个航班(VJ106/VJ108回到河内),才算完成当日任务
 
@@ -216,7 +216,7 @@ def generate_abnormal_notification(aircraft_num, flight_num, abnormal_info, row)
     detector = AbnormalDetector()
     abnormal_type = detector.get_abnormal_type_description(abnormal_info['abnormal_type'])
 
-    notification = f"⚠️ {aircraft_num} 异常事件：{flight_num} {abnormal_type}，原计划{abnormal_info['original_route']}，实际执行{abnormal_info['actual_route']}，异常{abnormal_info['abnormal_airport']}。"
+    notification = f"⚠️ {aircraft_num} 异常事件：{flight_num} {abnormal_type}，原计划{abnormal_info['original_route']}，系统显示{abnormal_info['actual_route']}，异常{abnormal_info['abnormal_airport']}。"
 
     return notification
 
@@ -242,7 +242,7 @@ def wrap_status_with_abnormal(status_notifications, abnormal_detected, abnormal_
     detector = AbnormalDetector()
     abnormal_type = detector.get_abnormal_type_description(abnormal_detected['abnormal_type'])
 
-    abnormal_warning = f"⚠️ 提醒：原计划{abnormal_detected['original_route']}，实际执行{abnormal_detected['actual_route']}，{abnormal_type}。"
+    abnormal_warning = f"⚠️ 提醒：原计划{abnormal_detected['original_route']}，系统显示{abnormal_detected['actual_route']}，{abnormal_type}。"
 
     # 将异常警告放在状态通知后面
     return status_notifications + [abnormal_warning]

@@ -101,7 +101,7 @@ class AbnormalDetector:
                 'is_abnormal': bool,
                 'abnormal_type': str,  # 'unknown_flight', 'route_mismatch', 'same_airport'
                 'original_route': str,   # 原计划航线
-                'actual_route': str,     # 实际执行航线
+                'actual_route': str,     # 系统显示航线
                 'abnormal_airport': str # 异常机场
             }
         """
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     if result:
         print(f"检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
         print(f"原计划: {result['original_route']}")
-        print(f"实际执行: {result['actual_route']}")
+        print(f"系统显示: {result['actual_route']}")
         print(f"异常机场: {result['abnormal_airport']}")
 
     # 测试3: 起降机场相同
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     if result:
         print(f"检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
         print(f"原计划: {result['original_route']}")
-        print(f"实际执行: {result['actual_route']}")
+        print(f"系统显示: {result['actual_route']}")
         print(f"异常机场: {result['abnormal_airport']}")
 
     # 测试4: 未知航班
@@ -240,5 +240,5 @@ if __name__ == "__main__":
     )
     if result:
         print(f"检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
-        print(f"实际执行: {result['actual_route']}")
+        print(f"系统显示: {result['actual_route']}")
         print(f"异常机场: {result['abnormal_airport']}")

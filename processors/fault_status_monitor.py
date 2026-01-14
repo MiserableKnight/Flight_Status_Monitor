@@ -21,6 +21,7 @@ sys.path.insert(0, project_root)
 
 from core.logger import get_logger
 from core.fault_status_notifier import FaultStatusNotifier
+from core.fault_filter import FaultFilter
 from config.config_loader import load_config
 from config.flight_phase_mapping import get_phase_name, get_fault_type_name, get_phase_name_without_suffix
 from config.flight_schedule import FlightSchedule
@@ -521,6 +522,19 @@ def monitor_fault_status(target_date=None):
             df.rename(columns={'触发_time': '触发时间'}, inplace=True)
 
         print(f"   ✅ 读取到 {len(df)} 行数据")
+
+        # 应用故障过滤规则
+        print("\n🔍 应用故障过滤规则...")
+        try:
+            filter_obj = FaultFilter()
+            filter_stats = filter_obj.get_filter_stats()
+            print(f"   📋 过滤规则: 组合规则 {filter_stats['single_filter_rules']} 条, 关联规则 {filter_stats['group_filter_rules']} 条")
+
+            df = filter_obj.apply_filters(df)
+            print(f"   ✅ 过滤后剩余 {len(df)} 行数据")
+        except Exception as e:
+            print(f"   ⚠️ 过滤失败，继续使用原始数据: {e}")
+            log(f"Filter application failed: {e}", "WARNING")
     except Exception as e:
         print(f"❌ 读取数据文件失败：{e}")
         log(f"Failed to read data: {e}", "ERROR")

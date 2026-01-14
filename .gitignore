@@ -2,6 +2,9 @@
 logs/
 *.log
 
+# 敏感配置文件
+config/config.ini
+
 # Python
 __pycache__/
 *.py[cod]

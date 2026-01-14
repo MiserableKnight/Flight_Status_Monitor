@@ -1,0 +1,55 @@
+# -*- coding: utf-8 -*-
+# 航段数据监控系统核心配置文件
+#
+# 说明：
+# - credentials: 系统登录凭证
+# - paths: 本地存储路径配置
+# - target: 系统URL配置
+# - aircraft: 监控飞机列表
+# - urls: 各模块URL特征关键词
+# - scheduler: 任务调度时间配置
+# - gmail: Gmail通知配置（可选）
+
+[credentials]
+# 系统登录账号和密码
+username = YOUR_USERNAME
+password = YOUR_PASSWORD
+
+[paths]
+# 浏览器用户数据目录（用于保持登录状态）
+user_data_path = /path/to/your/chrome_debug
+
+[target]
+# 系统首页URL
+url = https://cis.comac.cc:8004/caphm/mainController/index.html
+
+[aircraft]
+# 要监控的飞机号列表（用逗号分隔）
+# 支持格式：B-XXXX 或 C909-XXX/B-XXXX
+aircraft_list = B-652G, B-656E
+
+[urls]
+# 系统各模块的URL特征关键词（用于智能导航检测）
+home = mainController/index.html
+leg_data = lineLogController/index.html
+login_keywords = login,rbacUsersController,auth
+
+[scheduler]
+# 任务调度时间配置（24小时制）
+# 格式：HH:MM
+# start_time: 系统启动时间
+# end_time: 系统停止时间
+start_time = 06:30
+end_time = 21:00
+
+[gmail]
+# Gmail通知配置（统一邮件配置源）
+# 发件人邮箱地址
+sender_email = your_email@gmail.com
+# Gmail应用专用密码（非账号密码，生成地址：https://myaccount.google.com/apppasswords）
+app_password = YOUR_GMAIL_APP_PASSWORD
+# 收件人邮箱（多个收件人用逗号分隔）
+recipients = recipient@example.com
+#, wangzhenlong@comac.cc
+# 发件人显示名称
+sender_name = 越捷航段监控系统

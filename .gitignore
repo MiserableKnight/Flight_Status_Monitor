@@ -2,9 +2,10 @@
 logs/
 *.log
 
-# 敏感配置文件
+# 敏感配置文件（全局忽略，无论目录层级）
 .env
-config/config.ini
+**/config.ini
+config.ini
 
 # Python
 __pycache__/

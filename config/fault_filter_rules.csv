@@ -1,2 +1,3 @@
 获取时间,机号,机型,航空公司,航班号,ATA,航段,触发时间,描述,故障类型,飞行阶段,处理状态,类别-优先权,备注
 ,,,,,,,,ADC1:INTERNAL FAULT,,In_Air,,,飞行阶段=In_Air 且 描述包含ADC1:INTERNAL FAULT
+,,,,,,,,AUTOBRAKE DISARM,,LN,,,应该是飞行员使用了人工刹车

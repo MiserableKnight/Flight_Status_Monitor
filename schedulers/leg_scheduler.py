@@ -14,7 +14,7 @@ from typing import Optional
 
 from .base_scheduler import BaseScheduler
 from core.flight_tracker import FlightTracker
-from core.notifier import GmailNotifier
+from notifiers.task_notifier import TaskNotifier
 from fetchers.leg_fetcher import LegFetcher
 from interfaces.interfaces import IFetcher, ILogger, IConfigLoader
 
@@ -62,7 +62,7 @@ class LegScheduler(BaseScheduler):
 
         # 初始化通知器（如果配置了Gmail）
         gmail_config = self.config.get('gmail', {})
-        self.notifier = GmailNotifier(config=gmail_config) if gmail_config else None
+        self.notifier = TaskNotifier(config=gmail_config) if gmail_config else None
 
         # 依赖注入：使用传入的 fetcher 或自动创建
         print("\n" + "="*60)

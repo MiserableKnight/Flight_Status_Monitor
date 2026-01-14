@@ -1,29 +1,34 @@
 # -*- coding: utf-8 -*-
 """
-航段状态邮件通知模块
-基于 YAML 配置文件的邮件发送器
-专门用于航段(leg)数据的状态变化通知
+邮件通知器基类
+
+提供通用的邮件发送功能：
+- 配置管理（支持 config.ini 和 YAML）
+- 邮件发送（支持 SSL/TLS）
+- 附件处理
+- 频率控制
+
+子类只需实现：
+- 专用的通知方法（如 send_leg_status_notification）
 """
 import smtplib
 import os
 import yaml
-import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from typing import List, Optional
 from datetime import datetime
+from abc import ABC, abstractmethod
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.logger import get_logger
+from .logger import get_logger
 
 
-class LegStatusNotifier:
-    """航段状态邮件通知器
-    专门用于航段(leg)数据的状态变化通知
-    优先从 config.ini 读取配置，兼容旧的 email_config.yaml
+class BaseNotifier(ABC):
+    """
+    邮件通知器基类
+
+    提供通用的邮件发送功能，子类实现具体的业务通知方法
     """
 
     def __init__(self, config_file=None, config_dict=None):
@@ -31,20 +36,22 @@ class LegStatusNotifier:
         初始化通知器
 
         Args:
-            config_file: 旧的 YAML 配置文件路径（已弃用，仅为向后兼容）
-            config_dict: 配置字典（从 config.ini 的 [gmail] 段读取）
+            config_file: YAML 配置文件路径（向后兼容）
+            config_dict: 配置字典（从 config.ini 读取）
         """
         self.log = get_logger()
+        self.last_send_time = 0
+        self.min_send_interval = 30  # 最小发送间隔(秒),避免Gmail限流
 
-        # 优先使用 config_dict（新方式：从 config.ini 读取）
+        # 加载配置
         if config_dict:
             self.config = self._load_from_dict(config_dict)
             self.config_source = "config.ini"
         else:
-            # 回退到 YAML 文件（旧方式：向后兼容）
             self.config = self._load_from_yaml(config_file)
             self.config_source = "email_config.yaml"
 
+        # 检查配置
         if self.config:
             self.enabled = True
             self.log(f"邮件通知器初始化成功（配置来源: {self.config_source}）")
@@ -52,12 +59,16 @@ class LegStatusNotifier:
             self.enabled = False
             self.log("邮件通知器初始化失败", "WARNING")
 
-        # 邮件发送频率控制
-        self.last_send_time = 0
-        self.min_send_interval = 30  # 最小发送间隔(秒),避免Gmail限流
-
     def _load_from_dict(self, config_dict: dict) -> dict:
-        """从配置字典加载（新方式）"""
+        """
+        从配置字典加载（新方式：从 config.ini 读取）
+
+        Args:
+            config_dict: 配置字典
+
+        Returns:
+            dict: 映射后的配置
+        """
         if not config_dict:
             return None
 
@@ -81,7 +92,15 @@ class LegStatusNotifier:
         return mapped_config
 
     def _load_from_yaml(self, config_file):
-        """从 YAML 配置文件加载（旧方式，向后兼容）"""
+        """
+        从 YAML 配置文件加载（旧方式：向后兼容）
+
+        Args:
+            config_file: YAML 配置文件路径
+
+        Returns:
+            dict: 邮件配置
+        """
         if config_file is None:
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             config_file = os.path.join(project_root, 'email_config.yaml')
@@ -110,7 +129,12 @@ class LegStatusNotifier:
             return None
 
     def is_enabled(self) -> bool:
-        """检查邮件通知功能是否启用"""
+        """
+        检查邮件通知功能是否启用
+
+        Returns:
+            bool: 是否启用
+        """
         return self.enabled
 
     def send_email(self, subject: str, body: str, attachments: List[str] = None) -> bool:
@@ -180,47 +204,106 @@ class LegStatusNotifier:
             print(f"❌ 邮件发送失败: {e}")
             return False
 
-    def send_leg_status_notification(self, status_changes: list, date_str: str) -> bool:
+    def _get_current_time(self) -> str:
         """
-        发送航段状态变化通知
+        获取当前时间字符串
+
+        Returns:
+            str: 格式化的时间字符串
+        """
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def send_success_notification(self, task_name: str, data_file: str = None) -> bool:
+        """
+        发送任务成功通知
 
         Args:
-            status_changes: 状态变化列表，每个元素是状态描述字符串
-            date_str: 日期字符串
+            task_name: 任务名称
+            data_file: 数据文件路径（可选）
 
         Returns:
             bool: 发送是否成功
         """
-        if not status_changes:
-            return True
+        subject = f"✅ {task_name} 执行成功"
+        body = f"""
+任务名称: {task_name}
+执行时间: {self._get_current_time()}
 
-        subject = f"航段状态 - {date_str}"
-        body = '\n'.join(status_changes)
+数据抓取任务已成功完成。
+
+"""
+
+        if data_file and os.path.exists(data_file):
+            body += f"数据文件: {os.path.basename(data_file)}\n"
+            body += f"文件路径: {data_file}\n"
+            return self.send_email(subject, body, attachments=[data_file])
+        else:
+            return self.send_email(subject, body)
+
+    def send_error_notification(self, task_name: str, error_message: str) -> bool:
+        """
+        发送任务失败通知
+
+        Args:
+            task_name: 任务名称
+            error_message: 错误信息
+
+        Returns:
+            bool: 发送是否成功
+        """
+        subject = f"❌ {task_name} 执行失败"
+        body = f"""
+任务名称: {task_name}
+执行时间: {self._get_current_time()}
+
+任务执行过程中发生错误:
+
+{error_message}
+
+请检查系统日志获取详细信息。
+"""
 
         return self.send_email(subject, body)
 
+    def send_summary_report(self, report_data: dict) -> bool:
+        """
+        发送汇总报告
 
-if __name__ == "__main__":
-    # 测试代码
-    print("🧪 航段状态邮件通知器测试")
-    print("=" * 60)
+        Args:
+            report_data: 报告数据字典
 
-    notifier = LegStatusNotifier()
+        Returns:
+            bool: 发送是否成功
+        """
+        subject = f"📊 数据抓取汇总报告 - {report_data.get('date', '')}"
 
-    if notifier.is_enabled():
-        print("✅ 航段状态邮件通知器已启用")
-        print(f"📧 发件人: {notifier.config['smtp_user']}")
-        print(f"📮 收件人: {notifier.config['receiver_email']}")
-
-        # 测试发送状态通知
-        test_changes = [
-            "VJ105（河内-昆岛）已滑出",
-            "VJ107（河内-昆岛）已起飞，预计1小时55分钟后落地"
+        body_lines = [
+            f"数据抓取汇总报告",
+            f"报告日期: {report_data.get('date', '')}",
+            f"",
+            f"【航班数据】",
+            f"  抓取次数: {report_data.get('flight_fetch_count', 0)}",
+            f"  成功次数: {report_data.get('flight_success_count', 0)}",
+            f"  失败次数: {report_data.get('flight_failure_count', 0)}",
+            f"",
+            f"【故障数据】",
+            f"  抓取次数: {report_data.get('faults_fetch_count', 0)}",
+            f"  成功次数: {report_data.get('faults_success_count', 0)}",
+            f"  失败次数: {report_data.get('faults_failure_count', 0)}",
+            f"",
+            f"【累计数据】",
+            f"  航班累计飞行时间: {report_data.get('total_air_time', 'N/A')} 小时",
+            f"  航班累计轮挡时间: {report_data.get('total_block_time', 'N/A')} 小时",
+            f"  故障累计记录数: {report_data.get('total_faults_count', 'N/A')} 条",
         ]
 
-        success = notifier.send_leg_status_notification(test_changes, "2026-01-09")
-        print(f"📤 发送结果: {'成功' if success else '失败'}")
-    else:
-        print("⚠️ 邮件通知器未启用")
+        body = '\n'.join(body_lines)
 
-    print("\n✅ 测试完成")
+        # 添加附件
+        attachments = []
+        for key in ['flight_data_file', 'faults_data_file']:
+            file_path = report_data.get(key)
+            if file_path and os.path.exists(file_path):
+                attachments.append(file_path)
+
+        return self.send_email(subject, body, attachments=attachments)

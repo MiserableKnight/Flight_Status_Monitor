@@ -40,7 +40,7 @@ def test_abnormal_detector():
     assert result['abnormal_type'] == 'route_mismatch', "异常类型应为 route_mismatch"
     print(f"✅ 检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
     print(f"   原计划: {result['original_route']}")
-    print(f"   实际执行: {result['actual_route']}")
+    print(f"   系统显示: {result['actual_route']}")
     print(f"   异常机场: {result['abnormal_airport']}")
 
     # 测试3: 起降机场相同
@@ -54,7 +54,7 @@ def test_abnormal_detector():
     assert result['abnormal_type'] == 'same_airport', "异常类型应为 same_airport"
     print(f"✅ 检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
     print(f"   原计划: {result['original_route']}")
-    print(f"   实际执行: {result['actual_route']}")
+    print(f"   系统显示: {result['actual_route']}")
     print(f"   异常机场: {result['abnormal_airport']}")
 
     # 测试4: 未知航班
@@ -67,7 +67,7 @@ def test_abnormal_detector():
     assert result is not None, "应检测到异常"
     assert result['abnormal_type'] == 'unknown_flight', "异常类型应为 unknown_flight"
     print(f"✅ 检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
-    print(f"   实际执行: {result['actual_route']}")
+    print(f"   系统显示: {result['actual_route']}")
     print(f"   异常机场: {result['abnormal_airport']}")
 
     # 测试5: 河内-胡志明异常航线
@@ -81,7 +81,7 @@ def test_abnormal_detector():
     assert result['abnormal_type'] == 'route_mismatch', "异常类型应为 route_mismatch"
     print(f"✅ 检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
     print(f"   原计划: {result['original_route']}")
-    print(f"   实际执行: {result['actual_route']}")
+    print(f"   系统显示: {result['actual_route']}")
     print(f"   异常机场: {result['abnormal_airport']}")
 
     # 测试6: 机场名称简化
@@ -130,7 +130,7 @@ def test_abnormal_detector():
     for ex in abnormal_examples:
         detector = AbnormalDetector()
         abnormal_type = detector.get_abnormal_type_description(ex['info']['abnormal_type'])
-        notification = f"⚠️ {ex['aircraft']} 异常事件：{ex['flight']} {abnormal_type}，原计划{ex['info']['original_route']}，实际执行{ex['info']['actual_route']}，异常{ex['info']['abnormal_airport']}。"
+        notification = f"⚠️ {ex['aircraft']} 异常事件：{ex['flight']} {abnormal_type}，原计划{ex['info']['original_route']}，系统显示{ex['info']['actual_route']}，异常{ex['info']['abnormal_airport']}。"
         print(notification)
         print()
 

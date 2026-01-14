@@ -192,7 +192,7 @@ class FaultStatusNotifier:
         Returns:
             bool: 发送是否成功
         """
-        subject = f"故障信息汇总 - {date_str}"
+        subject = f"故障信息报送 - {date_str}"
 
         attachments = [attachment] if attachment else None
 
@@ -213,7 +213,7 @@ if __name__ == "__main__":
 
         # 测试发送故障通知
         test_summary = """
-故障信息汇总 - 2026-01-12
+故障信息报送 - 2026-01-12
 ========================
 
 B-656E (VJ108):

@@ -216,7 +216,7 @@ def generate_abnormal_notification(aircraft_num, flight_num, abnormal_info, row)
     detector = AbnormalDetector()
     abnormal_type = detector.get_abnormal_type_description(abnormal_info['abnormal_type'])
 
-    notification = f"⚠️ {aircraft_num} 异常事件：{flight_num} {abnormal_type}，原计划{abnormal_info['original_route']}，实际执行{abnormal_info['actual_route']}，异常{abnormal_info['abnormal_airport']}。具体情况请询问相应专业人员。"
+    notification = f"⚠️ {aircraft_num} 异常事件：{flight_num} {abnormal_type}，原计划{abnormal_info['original_route']}，实际执行{abnormal_info['actual_route']}，异常{abnormal_info['abnormal_airport']}。"
 
     return notification
 
@@ -242,7 +242,7 @@ def wrap_status_with_abnormal(status_notifications, abnormal_detected, abnormal_
     detector = AbnormalDetector()
     abnormal_type = detector.get_abnormal_type_description(abnormal_detected['abnormal_type'])
 
-    abnormal_warning = f"⚠️ 提醒：原计划{abnormal_detected['original_route']}，实际执行{abnormal_detected['actual_route']}，{abnormal_type}。具体情况请询问相应专业人员。"
+    abnormal_warning = f"⚠️ 提醒：原计划{abnormal_detected['original_route']}，实际执行{abnormal_detected['actual_route']}，{abnormal_type}。"
 
     # 将异常警告放在状态通知后面
     return status_notifications + [abnormal_warning]

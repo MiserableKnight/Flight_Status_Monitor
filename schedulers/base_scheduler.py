@@ -131,6 +131,117 @@ class BaseScheduler(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_page(self):
+        """
+        获取当前调度器的页面对象
+
+        子类需要实现，返回各自的 page 对象：
+        - LegScheduler: return self.leg_page
+        - FaultScheduler: return self.fault_page
+
+        Returns:
+            ChromiumPage: 页面对象
+        """
+        pass
+
+    # ========== 容错方法 ==========
+
+    def _is_page_alive(self, page):
+        """
+        检测页面连接是否存活
+
+        Args:
+            page: ChromiumPage 对象
+
+        Returns:
+            bool: True=连接正常, False=连接断开
+        """
+        if page is None:
+            return False
+        try:
+            # 尝试获取页面URL（轻量级检测）
+            _ = page.url
+            return True
+        except Exception:
+            return False
+
+    def _reconnect_browser(self, max_retries=3):
+        """
+        重新连接浏览器
+
+        利用子类实现的 connect_browser() 和 login() 抽象方法
+
+        Args:
+            max_retries: 最大重试次数（默认3次）
+
+        Returns:
+            bool: True=重连成功, False=重连失败
+        """
+        for attempt in range(max_retries):
+            try:
+                print("\n" + "="*60)
+                print(f"🔄 尝试重连浏览器... ({attempt+1}/{max_retries})")
+                print("="*60)
+
+                # 重新连接
+                if not self.connect_browser():
+                    print(f"❌ 连接失败 ({attempt+1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        time.sleep(3)
+                        continue
+                    return False
+
+                # 重新登录
+                if not self.login():
+                    print(f"❌ 登录失败 ({attempt+1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        time.sleep(3)
+                        continue
+                    return False
+
+                print("✅ 重连成功")
+                print("="*60)
+                return True
+
+            except Exception as e:
+                print(f"❌ 重连异常 ({attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(3)
+                else:
+                    print("❌ 重连失败，已达最大重试次数")
+                    return False
+
+        return False
+
+    def _fetch_with_reconnect(self):
+        """
+        带重连容错的数据抓取
+
+        自动检测连接状态，断开时自动重连
+
+        Returns:
+            bool: True=抓取成功, False=抓取失败
+        """
+        # 获取当前页面对象
+        page = self.get_page()
+
+        # 检测连接状态
+        if not self._is_page_alive(page):
+            print("\n⚠️ 检测到连接断开")
+            print("🔄 触发自动重连...")
+
+            # 尝试重连
+            if not self._reconnect_browser():
+                print("❌ 自动重连失败，本次抓取跳过")
+                self.log("自动重连失败", "ERROR")
+                return False
+
+            print("✅ 重连成功，继续本次抓取\n")
+
+        # 执行实际的抓取逻辑（由子类实现）
+        return self.fetch_data()
+
     # ========== 工具方法 ==========
 
     def parse_time(self, time_str: str) -> datetime:
@@ -224,8 +335,8 @@ class BaseScheduler(ABC):
                     print(f"🔍 [{now.strftime('%H:%M:%S')}] 检查 {self.data_type} 状态...")
                     print('='*60)
 
-                    # 执行抓取
-                    success = self.fetch_data()
+                    # 执行抓取（带自动重连）
+                    success = self._fetch_with_reconnect()
                     self.update_stats(success)
 
                     last_check = now

@@ -115,6 +115,17 @@ class FaultScheduler(BaseScheduler):
             self.log(f"登录失败: {e}", "ERROR")
             return False
 
+    def get_page(self):
+        """
+        返回 Fault 调度器的页面对象
+
+        实现基类的抽象方法，用于连接检测和自动重连
+
+        Returns:
+            ChromiumPage: self.fault_page
+        """
+        return self.fault_page
+
     def fetch_data(self):
         """
         抓取故障数据（优化版：先判断再写入）

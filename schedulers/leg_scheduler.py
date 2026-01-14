@@ -122,6 +122,17 @@ class LegScheduler(BaseScheduler):
             self.log(f"登录失败: {e}", "ERROR")
             return False
 
+    def get_page(self):
+        """
+        返回 Leg 调度器的页面对象
+
+        实现基类的抽象方法，用于连接检测和自动重连
+
+        Returns:
+            ChromiumPage: self.leg_page
+        """
+        return self.leg_page
+
     def fetch_data(self):
         """
         抓取航段数据

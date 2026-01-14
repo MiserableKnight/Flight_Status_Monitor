@@ -42,6 +42,14 @@ echo.
 REM 切换到项目根目录（避免在bin文件夹下创建data和logs）
 cd /d "%~dp0.."
 
+REM 清理Python缓存（确保使用最新代码）
+echo 🧹 清理Python缓存...
+if exist "__pycache__" rmdir /s /q "__pycache__" 2>nul
+if exist "schedulers\__pycache__" rmdir /s /q "schedulers\__pycache__" 2>nul
+del /s /q "*.pyc" >nul 2>&1
+echo ✅ 缓存清理完成
+echo.
+
 "%PYTHON_EXE%" bin\run_fault_scheduler.py
 
 if %ERRORLEVEL% EQU 0 (

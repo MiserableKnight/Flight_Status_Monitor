@@ -39,43 +39,23 @@ class FaultFetcher(BaseFetcher):
         self.parser = FaultParser()
         self.saver = FaultDataSaver(project_root)
 
-    def connect_browser(self):
+    def get_browser_port(self):
         """
-        [重写] 连接到独立的故障监控浏览器 (端口 9333)
-        """
-        from DrissionPage import ChromiumPage, ChromiumOptions
-
-        co = ChromiumOptions()
-        # 1. 设置端口为 9333
-        co.set_local_port(9333)
-        # 2. 设置对应的 User Data 路径 (必须与你快捷方式里设置的一模一样)
-        # 注意：这里使用 r"" 原始字符串防止转义问题
-        co.set_user_data_path(r"C:\Users\zhengqiao\AppData\Local\Google\Chrome\User Data_Fault")
-
-        try:
-            print(f"\n{'='*60}")
-            print(f"🌐 (Fault专用) 连接浏览器端口 9333...")
-            page = ChromiumPage(co)
-            print(f"✅ 连接成功!")
-
-            # 这里的标签页管理很简单，直接获取当前激活的标签页即可
-            # 因为这个浏览器只有你在用
-            self.assigned_tab_object = page.get_tab(page.tab_ids[0])
-            return self.assigned_tab_object
-
-        except Exception as e:
-            print(f"❌ 连接 9333 端口失败: {e}")
-            print("💡 请确保已经通过快捷方式启动了故障监控专用浏览器！")
-            return None
-
-    def get_target_url_keyword(self):
-        """
-        返回用于标签页匹配的URL关键词
+        [重写] 返回故障监控专用端口
 
         Returns:
-            str: 'integratedMonitorController'
+            int: 9333
         """
-        return "integratedMonitorController"
+        return 9333
+
+    def get_browser_user_data_path(self):
+        """
+        [重写] 返回故障监控专用用户数据路径
+
+        Returns:
+            str: 故障监控浏览器用户数据路径
+        """
+        return r"C:\Users\zhengqiao\AppData\Local\Google\Chrome\User Data_Fault"
 
     def get_data_prefix(self):
         """返回数据文件前缀"""
@@ -123,15 +103,9 @@ class FaultFetcher(BaseFetcher):
         Returns:
             成功返回数据列表，失败返回 None
         """
-        # 标签页隔离检查
-        if not self.ensure_assigned_tab(page):
-            print("⚠️  标签页检查失败")
-            return None
-
         print("\n" + "="*60)
         print("🚀 故障数据抓取启动")
         print(f"⏰ 启动时间: {time.strftime('%H:%M:%S')}")
-        print(f"🏷️  标签页索引: {self.assigned_tab_index}")
         print(f"📅 目标日期: {target_date}")
         if aircraft_list:
             print(f"✈️  监控飞机: {', '.join(aircraft_list)}")

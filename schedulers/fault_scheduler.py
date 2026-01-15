@@ -134,11 +134,6 @@ class FaultScheduler(BaseScheduler):
             bool: 是否成功
         """
         try:
-            # 确保在正确的标签页上操作
-            if not self.fault_fetcher.ensure_assigned_tab(self.fault_page):
-                print("⚠️  标签页切换失败")
-                return False
-
             # 获取配置的飞机列表
             aircraft_list = self.config.get('aircraft_list', [])
             target_date = self.fault_fetcher.get_today_date()

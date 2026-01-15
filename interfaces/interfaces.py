@@ -80,18 +80,6 @@ class IFetcher(ABC):
         """
         pass
 
-    @abstractmethod
-    def ensure_assigned_tab(self, page: ChromiumPage) -> bool:
-        """
-        确保在分配的标签页上操作
-
-        Args:
-            page: 浏览器页面对象
-
-        Returns:
-            bool: 是否成功
-        """
-        pass
 
 
 class ILogger(ABC):

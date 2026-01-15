@@ -141,11 +141,6 @@ class LegScheduler(BaseScheduler):
             bool: 是否成功
         """
         try:
-            # 确保在正确的标签页上操作
-            if not self.leg_fetcher.ensure_assigned_tab(self.leg_page):
-                print("⚠️  标签页切换失败")
-                return False
-
             # 执行抓取
             target_date = self.leg_fetcher.get_today_date()
             data = self.leg_fetcher.navigate_to_target_page(self.leg_page, target_date)

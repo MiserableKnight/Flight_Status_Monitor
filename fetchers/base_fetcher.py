@@ -16,7 +16,6 @@ import csv
 import configparser
 import os
 import shutil
-import json
 from datetime import datetime
 from abc import ABC, abstractmethod
 import sys
@@ -32,78 +31,26 @@ from config.config_loader import ConfigLoader
 class BaseFetcher(ABC):
     """数据抓取基类"""
 
-    # 类级别的浏览器实例管理（共享同一个浏览器连接）
-    _shared_browser = None
-    _shared_tab_counter = 0
-    _tab_registry_file = os.path.join(project_root, 'data', '.tab_registry.json')  # 跨进程共享的注册表文件
+    # 类级别的浏览器实例管理（支持多端口）
+    _browsers = {}  # 按端口存储浏览器实例 {port: ChromiumPage}
 
-    @classmethod
-    def _load_tab_registry(cls):
-        """从文件加载标签页注册表"""
-        if os.path.exists(cls._tab_registry_file):
-            try:
-                with open(cls._tab_registry_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception as e:
-                print(f"⚠️  加载注册表失败: {e}")
-                return {}
-        return {}
-
-    @classmethod
-    def _save_tab_registry(cls, registry):
-        """保存标签页注册表到文件"""
-        try:
-            os.makedirs(os.path.dirname(cls._tab_registry_file), exist_ok=True)
-            with open(cls._tab_registry_file, 'w', encoding='utf-8') as f:
-                json.dump(registry, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"⚠️  保存注册表失败: {e}")
-
-    @classmethod
-    def reset_tab_registry(cls):
-        """重置标签页注册表（用于测试或重新初始化）"""
-        cls._save_tab_registry({})
-        cls._shared_browser = None
-        cls._shared_tab_counter = 0
-        print("✅ 标签页注册表已重置")
-
-    def get_target_url_keyword(self):
+    def get_browser_port(self):
         """
-        获取目标URL关键词，用于标签页匹配
-        子类应该重写此方法以返回特定的URL关键词
+        获取浏览器端口（子类可重写）
 
         Returns:
-            str: URL关键词（如 'lineLogController' 或 'integratedMonitorController'）
+            int: 浏览器调试端口，默认 9222
         """
-        raise NotImplementedError(f"{self.fetcher_name} 必须实现 get_target_url_keyword()")
+        return 9222
 
-    def find_tab_by_url(self, browser, url_keyword):
+    def get_browser_user_data_path(self):
         """
-        通过URL关键词查找标签页
-
-        Args:
-            browser: 浏览器对象
-            url_keyword: URL关键词
+        获取浏览器用户数据路径（子类可重写）
 
         Returns:
-            ChromiumPage: 找到的标签页对象，未找到返回 None
+            str: 用户数据路径
         """
-        try:
-            all_tabs = browser.get_tabs()
-            for tab in all_tabs:
-                try:
-                    tab_url = tab.url
-                    if url_keyword in tab_url:
-                        print(f"   ✅ 通过关键词 '{url_keyword}' 找到已存在的标签页")
-                        print(f"   📍 URL: {tab_url}")
-                        return tab
-                except Exception as e:
-                    # 某些标签页可能无法访问URL，跳过
-                    continue
-            return None
-        except Exception as e:
-            print(f"   ⚠️ 查找标签页时出错: {e}")
-            return None
+        return self.user_data_path
 
     def __init__(self, config_file=None):
         """
@@ -120,10 +67,6 @@ class BaseFetcher(ABC):
         # 初始化状态标记（避免重复设置机号和日期）
         self._initialized = False
         self._initialized_date = None  # 记录已初始化的日期
-
-        # 标签页管理（使用索引）
-        self.assigned_tab_index = None  # 分配给此fetcher的标签页索引
-        self.assigned_tab_object = None  # 分配给此fetcher的标签页对象（用于操作）
         self.fetcher_name = self.__class__.__name__  # 记录fetcher类型名称
 
         # 加载配置
@@ -209,182 +152,62 @@ class BaseFetcher(ABC):
 
     def connect_browser(self):
         """
-        连接到浏览器并分配独立标签页（基于URL匹配）
+        连接到浏览器
 
         核心改进：
-        - 使用URL关键词而非索引来管理标签页
-        - 避免索引动态变化导致的混乱
-        - 更稳定、更可靠的标签页识别机制
+        - 支持多端口浏览器实例管理
+        - 子类通过重写 get_browser_port() 指定端口
+        - 每个端口使用独立的浏览器实例
 
         :return: ChromiumPage 对象,失败返回 None
         """
-        # 如果已有共享浏览器实例，直接复用
-        if BaseFetcher._shared_browser is None:
+        # 获取子类指定的端口配置
+        port = self.get_browser_port()
+        user_data_path = self.get_browser_user_data_path()
+
+        # 按端口管理浏览器实例
+        if port not in BaseFetcher._browsers:
             co = ChromiumOptions()
-            co.set_user_data_path(self.user_data_path)
-            co.set_local_port(9222)
+            co.set_user_data_path(user_data_path)
+            co.set_local_port(port)
 
             try:
                 print(f"\n{'='*60}")
                 print(f"🌐 初始化浏览器连接...")
+                print(f"📍 端口: {port}")
+                print(f"📍 用户数据: {user_data_path}")
                 print(f"{'='*60}")
-                BaseFetcher._shared_browser = ChromiumPage(co)
-                print(f"✅ 浏览器连接成功! (端口: 9222)")
-                self.log("Browser connected successfully", "INFO")
+                BaseFetcher._browsers[port] = ChromiumPage(co)
+                print(f"✅ 浏览器连接成功!")
+                self.log(f"Browser connected successfully (port: {port})", "INFO")
             except Exception as e:
                 print(f"❌ 浏览器连接失败: {e}")
-                print("请确保Chrome调试模式已启动 (端口9222)")
+                print(f"请确保Chrome调试模式已启动 (端口{port})")
                 self.log(f"Browser connection failed: {e}", "ERROR")
                 return None
 
-        # 获取浏览器对象
-        browser = BaseFetcher._shared_browser
-
-        print(f"\n{'='*60}")
-        print(f"📋 标签页分配管理（基于URL匹配）")
-        print(f"{'='*60}")
-        print(f"🏷️  Fetcher类型: {self.fetcher_name}")
-        print(f"🔍 URL关键词: {self.get_target_url_keyword()}")
-
-        # 步骤1：通过URL关键词查找已存在的标签页
-        url_keyword = self.get_target_url_keyword()
-        existing_tab = self.find_tab_by_url(browser, url_keyword)
-
-        if existing_tab:
-            # 找到已存在的标签页，直接复用
-            print(f"🔄 复用已存在的标签页")
-            self.assigned_tab_object = existing_tab
-
-            # 获取当前标签页数量（用于日志）
-            all_tabs = browser.get_tabs()
-            for idx, tab in enumerate(all_tabs):
-                if tab.tab_id == existing_tab.tab_id:
-                    self.assigned_tab_index = idx
-                    print(f"📍 标签页索引: {idx}")
-                    break
-
-            # 确保标签页获得焦点
-            if hasattr(self.assigned_tab_object, 'focus'):
-                self.assigned_tab_object.focus()
-            print(f"✅ 已切换到 {self.fetcher_name} 的标签页")
-            print(f"{'='*60}\n")
-            return self.assigned_tab_object
-
-        # 步骤2：未找到匹配的标签页，创建新标签页
-        print(f"🆕 未找到匹配标签页，创建新标签页...")
-
-        # 检查是否有空白标签页可以复用
-        all_tabs = browser.get_tabs()
-        blank_tab = None
-
-        for tab in all_tabs:
-            try:
-                tab_url = tab.url
-                if "about:blank" in tab_url or "newtab" in tab_url or "chrome://" in tab_url:
-                    blank_tab = tab
-                    print(f"   🔄 发现空白标签页，将复用")
-                    break
-            except:
-                continue
-
-        if blank_tab:
-            # 复用空白标签页
-            self.assigned_tab_object = blank_tab
-            print(f"   ✅ 复用空白标签页")
-        else:
-            # 创建新标签页
-            print(f"   🌐 创建新标签页...")
-            self.assigned_tab_object = browser.new_tab("about:blank")
-            time.sleep(0.5)  # 等待标签页创建完成
-            print(f"   ✅ 新标签页已创建")
-
-        # 获取标签页索引（用于日志）
-        all_tabs = browser.get_tabs()
-        for idx, tab in enumerate(all_tabs):
-            if tab.tab_id == self.assigned_tab_object.tab_id:
-                self.assigned_tab_index = idx
-                print(f"📍 标签页索引: {idx}")
-                break
-
-        # 确保标签页获得焦点
-        if hasattr(self.assigned_tab_object, 'focus'):
-            self.assigned_tab_object.focus()
-
-        print(f"✅ {self.fetcher_name} 标签页分配完成")
-        print(f"{'='*60}\n")
-
-        return self.assigned_tab_object
-
-    def ensure_assigned_tab(self, page):
-        """
-        确保操作在分配的标签页上执行（使用tab_id而非索引）
-
-        核心改进：
-        - 使用稳定的 tab_id 而非动态变化的索引
-        - 更可靠的标签页识别和切换机制
-
-        :param page: ChromiumPage 对象
-        """
-        if self.assigned_tab_object is None:
-            print(f"⚠️  警告: {self.fetcher_name} 尚未分配标签页")
-            return False
-
-        # 使用 tab_id 进行比较（更稳定）
-        current_tab_id = page.tab_id
-        assigned_tab_id = self.assigned_tab_object.tab_id
-
-        if current_tab_id != assigned_tab_id:
-            print(f"\n🔄 检测到标签页切换，切换回分配的标签页...")
-            print(f"   当前标签页ID: {current_tab_id}")
-            print(f"   分配标签页ID: {assigned_tab_id}")
-
-            # 切换到分配的标签页（使用对象而非索引）
-            try:
-                if hasattr(self.assigned_tab_object, 'focus'):
-                    self.assigned_tab_object.focus()
-                print(f"   ✅ 已切换回 {self.fetcher_name} 的标签页\n")
-            except Exception as e:
-                print(f"   ❌ 切换失败: {e}\n")
-                return False
-
-        return True
+        # 返回浏览器对象
+        return BaseFetcher._browsers[port]
 
     def smart_login(self, page, target_url=None):
         """
         智能登录系统 - 自动检测并处理各种页面状态
 
         核心优化:
-        1. 优先确保在分配的标签页上操作
-        2. 检查是否已在目标页面（lineLogController 或 integratedMonitorController）
-        3. 如果已在目标页面，直接返回，不做任何跳转
-        4. 只在必要时才执行登录和跳转逻辑
-        5. 如果提供了 target_url，登录成功后直接跳转到目标页面
+        1. 检查是否已在目标页面（lineLogController 或 integratedMonitorController）
+        2. 如果已在目标页面，直接返回，不做任何跳转
+        3. 只在必要时才执行登录和跳转逻辑
+        4. 如果提供了 target_url，登录成功后直接跳转到目标页面
 
         :param page: ChromiumPage 对象
         :param target_url: 目标URL（可选），登录成功后直接跳转
         :return: 成功返回 True,失败返回 False
         """
-        # 标签页隔离检查：确保在分配的标签页上操作
-        if not self.ensure_assigned_tab(page):
-            print("⚠️  无法切换到分配的标签页")
-            return False
-
         print("\n🔍 检查当前页面状态...")
         current_url = page.url
         print(f"📍 当前URL: {current_url}")
 
-        # 获取当前 fetcher 的目标 URL 关键词
-        target_keyword = self.get_target_url_keyword()
-
-        # ========== 优先级1: 检查是否已在目标页面 ==========
-        # 核心优化: 如果已在目标页面（Leg 或 Fault），直接返回，不做任何跳转
-        if target_keyword in current_url:
-            print(f"✅ 已在目标页面: {target_keyword}")
-            print("💡 跳过登录流程，保持当前状态")
-            self.log("Already at target page, skipping login", "INFO")
-            return True
-
-        # ========== 优先级2: 检查是否在系统首页 ==========
+        # ========== 优先级1: 检查是否在系统首页 ==========
         if "mainController/index.html" in current_url:
             print("✅ 已在系统首页: mainController/index.html")
             self.log("Already at main page", "INFO")

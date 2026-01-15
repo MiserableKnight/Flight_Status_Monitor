@@ -26,15 +26,6 @@ from fetchers.base_fetcher import BaseFetcher
 class LegFetcher(BaseFetcher):
     """航段数据抓取器（优化版）"""
 
-    def get_target_url_keyword(self):
-        """
-        返回用于标签页匹配的URL关键词
-
-        Returns:
-            str: 'lineLogController'
-        """
-        return "lineLogController"
-
     def get_data_prefix(self):
         """返回数据文件前缀"""
         return "leg_data"
@@ -85,11 +76,6 @@ class LegFetcher(BaseFetcher):
         Returns:
             bool: 是否成功
         """
-        # 标签页隔离检查
-        if not self.ensure_assigned_tab(page):
-            print("⚠️  标签页检查失败")
-            return False
-
         print("\n" + "="*60)
         print("⚡ 快速刷新模式")
         print("="*60)
@@ -378,17 +364,11 @@ class LegFetcher(BaseFetcher):
         :param target_date: 目标日期
         :return: 成功返回数据,失败返回 None
         """
-        # 标签页隔离检查
-        if not self.ensure_assigned_tab(page):
-            print("⚠️  标签页检查失败")
-            return None
-
         print("\n" + "="*60)
         print("🚀 航段数据抓取器启动")
         print(f"⏰ 启动时间: {time.strftime('%H:%M:%S')}")
         print(f"📅 目标日期: {target_date}")
         print(f"✈️ 监控飞机: {', '.join(self.aircraft_list)}")
-        print(f"🏷️  标签页索引: {self.assigned_tab_index}")
         print("="*60)
 
         # ========== 步骤0: 检查初始化状态 ==========

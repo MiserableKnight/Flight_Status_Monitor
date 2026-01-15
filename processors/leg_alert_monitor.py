@@ -5,10 +5,11 @@
 功能：
 - 检测航段数据中的异常状态
 - 当滑出(OUT)后30分钟仍未起飞(OFF)时发送告警
+- 当起飞(OFF)后超过计划航程时间+30分钟仍未落地(ON)时发送告警
 - 当落地(ON)后30分钟仍未滑入(IN)时发送告警
 """
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 import sys
 import json
@@ -20,6 +21,7 @@ sys.path.insert(0, project_root)
 from core.logger import get_logger
 from notifiers.leg_alert_notifier import LegAlertNotifier
 from config.config_loader import load_config
+from config.flight_schedule import FlightSchedule
 
 
 class LegAlertMonitor:
@@ -30,6 +32,7 @@ class LegAlertMonitor:
 
     # 告警阈值（分钟）
     ALERT_THRESHOLD_OUT_OFF = 30  # 滑出后30分钟仍未起飞
+    ALERT_THRESHOLD_OFF_ON = 30   # 起飞后超过计划航程时间+30分钟仍未落地
     ALERT_THRESHOLD_ON_IN = 30    # 落地后30分钟仍未滑入
 
     def __init__(self, target_date=None):
@@ -197,6 +200,57 @@ class LegAlertMonitor:
 
         return None
 
+    def check_off_without_on_by_duration(self, row, current_minutes):
+        """
+        检查起飞后超过计划航程时间+30分钟仍未落地的情况
+
+        告警条件：起飞时刻 + 计划航程时间 + 30分钟 > 当前时间，但仍未落地
+
+        Args:
+            row: 航段数据行
+            current_minutes: 当前时间的分钟数
+
+        Returns:
+            str: 告警消息，如果无需告警返回 None
+        """
+        off_time = row.get('OFF')
+        on_time = row.get('ON')
+        flight_number = row.get('航班号', '')
+
+        # 检查是否有OFF但没有ON
+        if pd.isna(off_time) or off_time == '':
+            return None
+        if not pd.isna(on_time) and on_time != '':
+            return None
+
+        # 获取航班信息（计划航程时间）
+        flight_info = FlightSchedule.get_flight_info(flight_number)
+        if not flight_info:
+            # 未知航班，跳过此检查
+            return None
+
+        duration_minutes = flight_info.get('duration_minutes', 0)
+
+        # 计算OFF时间到现在的分钟数
+        off_minutes = self.parse_time_to_minutes(off_time)
+        if off_minutes is None:
+            return None
+
+        # 计算时间差（从起飞到现在）
+        time_diff = current_minutes - off_minutes
+
+        # 如果时间差为负，说明OFF可能在昨天
+        if time_diff < 0:
+            time_diff += 24 * 60
+
+        # 检查是否超过（计划航程时间 + 30分钟）
+        threshold = duration_minutes + self.ALERT_THRESHOLD_OFF_ON
+        if time_diff >= threshold:
+            aircraft = row.get('执飞飞机', '未知飞机')
+            return f"{aircraft} ({flight_number}) 起飞{duration_minutes}分钟（计划航程）仍未落地。请确认飞机状态。"
+
+        return None
+
     def check_alerts(self, df):
         """
         检查所有告警条件
@@ -210,16 +264,21 @@ class LegAlertMonitor:
         alerts = []
         current_minutes = self.get_current_minutes()
 
-        for idx, row in df.iterrows():
+        for _, row in df.iterrows():
             # 检查OUT后30分钟仍未OFF
             alert1 = self.check_out_without_off(row, current_minutes)
             if alert1:
                 alerts.append(alert1)
 
-            # 检查ON后30分钟仍未IN
-            alert2 = self.check_on_without_in(row, current_minutes)
+            # 检查OFF后超过计划航程时间+30分钟仍未ON
+            alert2 = self.check_off_without_on_by_duration(row, current_minutes)
             if alert2:
                 alerts.append(alert2)
+
+            # 检查ON后30分钟仍未IN
+            alert3 = self.check_on_without_in(row, current_minutes)
+            if alert3:
+                alerts.append(alert3)
 
         return alerts
 

@@ -385,7 +385,7 @@ class FaultStatusMonitor(BaseStatusMonitor):
     def generate_fault_summary(self, df):
         """生成故障汇总信息"""
         if df.empty:
-            return "今日无故障记录\n"
+            return "当前无故障需要关注\n"
 
         # 按飞机分组
         aircraft_groups = df.groupby('机号')

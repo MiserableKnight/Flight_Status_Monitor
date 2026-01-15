@@ -135,6 +135,10 @@ class FaultFetcher(BaseFetcher):
         print(f"📅 目标日期: {target_date}")
         if aircraft_list:
             print(f"✈️  监控飞机: {', '.join(aircraft_list)}")
+            # 保存目标机号列表，用于后续刷新验证
+            self._target_aircrafts = aircraft_list
+        else:
+            self._target_aircrafts = []
         print("="*60)
 
         # 故障监控页面URL
@@ -476,6 +480,11 @@ class FaultFetcher(BaseFetcher):
         print("   ⏳ 等待数据刷新...")
         time.sleep(3)
 
+        # 获取目标机号列表（用于验证数据是否刷新完成）
+        target_aircrafts = getattr(self, '_target_aircrafts', [])
+        # 只在首次运行时验证机号（防止刷新不完整）
+        need_aircraft_validation = not self._initialized
+
         # 等待数据容器更新
         print("   🔍 检查数据更新...")
         for i in range(10):
@@ -483,6 +492,33 @@ class FaultFetcher(BaseFetcher):
             if data_con:
                 rows = data_con.eles('tag:div@@name=t_rtm_faultMainRowDiv')
                 if rows:
+                    # 首次运行时：验证数据是否只包含目标机号
+                    if need_aircraft_validation and target_aircrafts:
+                        # 检查前3行的机号，确保都是目标机号
+                        sample_rows = rows[:min(3, len(rows))]
+                        has_non_target = False
+
+                        for row in sample_rows:
+                            try:
+                                # 提取机号（从第一列获取）
+                                first_cell = row.ele('tag:div@@class=t_c')
+                                if first_cell:
+                                    aircraft_text = first_cell.text.strip()
+                                    # 检查是否包含任何目标机号
+                                    is_target = any(target in aircraft_text for target in target_aircrafts)
+                                    if not is_target:
+                                        has_non_target = True
+                                        print(f"   ⚠️ 发现非目标机号数据: {aircraft_text}")
+                                    else:
+                                        print(f"   ✅ 发现目标机号数据: {aircraft_text}")
+                            except:
+                                pass
+
+                        if has_non_target:
+                            print(f"   🔄 数据未刷新完成（包含旧数据），继续等待2秒...")
+                            time.sleep(2)
+                            continue
+
                     print(f"   ✅ 数据已刷新 (耗时: {i+3}秒)")
                     print(f"   📊 当前数据行数: {len(rows)}")
                     print("="*60)

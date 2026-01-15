@@ -11,6 +11,7 @@
 import pandas as pd
 from typing import List, Set
 import os
+from datetime import datetime
 from core.logger import get_logger
 
 log = get_logger()
@@ -148,10 +149,11 @@ class FaultFilter:
         应用关联故障过滤规则
 
         规则说明：
-        - 针对同一架飞机、同一时间（HH:MM相同）
+        - 针对同一架飞机
         - 同时出现配置文件中定义的多个特定故障描述
         - 使用 str.contains() 进行模糊匹配
-        - 如果所有配置的故障都在同一时间内出现，则将这些故障全部过滤
+        - 如果所有配置的故障都在设定的时间间隔内出现，则将这些故障全部过滤
+        - 时间间隔由规则中的"时间间隔(秒)"字段指定
         """
         if self.group_rules.empty:
             return df
@@ -159,13 +161,11 @@ class FaultFilter:
         # 记录需要过滤的索引
         indices_to_filter = set()
 
-        # 添加时间键（机号 + HH:MM）
         df = df.copy()
-        df['_time_key'] = df['机号'] + '_' + df['触发时间'].str[:5]  # 取前5个字符 "HH:MM"
 
-        # 按时间键分组
-        for time_key, group in df.groupby('_time_key'):
-            # 检查该时间组是否匹配任一关联故障规则
+        # 按机号分组
+        for aircraft, group in df.groupby('机号'):
+            # 检查该机号的故障是否匹配任一关联故障规则
             for rule_idx, rule in self.group_rules.iterrows():
                 # 获取规则中定义的所有故障描述（非空）
                 fault_descriptions = []
@@ -176,26 +176,75 @@ class FaultFilter:
                 if len(fault_descriptions) < 2:
                     continue  # 至少需要2个故障描述才构成关联规则
 
-                # 检查该时间组是否包含所有配置的故障描述
-                group_descriptions = group['描述'].tolist()
+                # 获取时间间隔阈值（秒）
+                time_threshold = 0
+                if '时间间隔(秒)' in rule.index and pd.notna(rule['时间间隔(秒)']):
+                    try:
+                        time_threshold = int(rule['时间间隔(秒)'])
+                    except (ValueError, TypeError):
+                        time_threshold = 0
 
-                # 检查每个规则中的故障描述是否在组内出现
-                all_matched = True
-                for rule_desc in fault_descriptions:
-                    # 使用 str.contains() 检查是否有故障描述包含规则描述
-                    found = any(rule_desc in fault_desc for fault_desc in group_descriptions)
-                    if not found:
-                        all_matched = False
-                        break
+                # 检查该机号的故障组是否包含所有配置的故障描述
+                matched_faults = {}  # 故障描述 -> [匹配的行索引列表]
 
-                if all_matched:
-                    # 所有故障都在同一时间出现，标记该组所有故障为过滤
-                    matched_indices = group.index.tolist()
-                    indices_to_filter.update(matched_indices)
-                    log(f"关联规则 {rule_idx} 匹配时间组 {time_key}: {fault_descriptions}, 过滤 {len(matched_indices)} 条", "DEBUG")
+                # 遍历组内的每一条故障记录
+                for idx, row in group.iterrows():
+                    fault_desc = str(row['描述'])
 
-        # 清除临时列
-        df = df.drop(columns=['_time_key'])
+                    # 检查该故障是否匹配规则中的任一故障描述
+                    for rule_desc in fault_descriptions:
+                        if rule_desc in fault_desc:
+                            if rule_desc not in matched_faults:
+                                matched_faults[rule_desc] = []
+                            matched_faults[rule_desc].append(idx)
+                            break
+
+                # 检查是否所有规则的故障描述都找到了匹配
+                if len(matched_faults) == len(fault_descriptions):
+                    # 所有故障都出现了，现在检查时间间隔
+                    # 收集所有匹配故障的触发时间
+                    all_matched_indices = []
+                    for indices in matched_faults.values():
+                        all_matched_indices.extend(indices)
+
+                    # 去重（可能同一行匹配多个规则描述）
+                    all_matched_indices = list(set(all_matched_indices))
+
+                    # 获取所有匹配故障的触发时间
+                    trigger_times = df.loc[all_matched_indices, '触发时间'].tolist()
+
+                    # 解析时间并计算时间范围
+                    try:
+                        # 解析时间字符串 (假设格式为 "YYYY-MM-DD HH:MM:SS" 或 "HH:MM:SS")
+                        parsed_times = []
+                        for t in trigger_times:
+                            # 尝试解析完整的时间戳
+                            if ' ' in str(t):
+                                parsed_times.append(datetime.strptime(str(t), '%Y-%m-%d %H:%M:%S'))
+                            else:
+                                # 如果只有时间部分，使用今天日期
+                                time_part = str(t).split('.')[0]  # 去掉可能的毫秒部分
+                                parsed_times.append(datetime.strptime(time_part, '%H:%M:%S'))
+
+                        # 计算时间差（秒）
+                        if len(parsed_times) > 1:
+                            time_span = (max(parsed_times) - min(parsed_times)).total_seconds()
+
+                            # 如果时间差小于阈值，则过滤这些故障
+                            if time_span <= time_threshold:
+                                indices_to_filter.update(all_matched_indices)
+                                log(f"关联规则 {rule_idx} 匹配机号 {aircraft}: {fault_descriptions}, "
+                                    f"时间跨度 {time_span:.1f}秒 <= {time_threshold}秒, 过滤 {len(all_matched_indices)} 条", "DEBUG")
+                            else:
+                                log(f"关联规则 {rule_idx} 匹配机号 {aircraft}: {fault_descriptions}, "
+                                    f"时间跨度 {time_span:.1f}秒 > {time_threshold}秒, 不予过滤", "DEBUG")
+                        else:
+                            # 只有一个时间点，直接过滤
+                            indices_to_filter.update(all_matched_indices)
+                            log(f"关联规则 {rule_idx} 匹配机号 {aircraft}: {fault_descriptions}, "
+                                f"单点时间, 过滤 {len(all_matched_indices)} 条", "DEBUG")
+                    except Exception as e:
+                        log(f"解析时间失败: {e}, 跳过该规则", "WARNING")
 
         # 返回未匹配的行
         if indices_to_filter:

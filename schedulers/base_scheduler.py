@@ -172,12 +172,32 @@ class BaseScheduler(ABC):
 
         利用子类实现的 connect_browser() 和 login() 抽象方法
 
+        优化：
+        - 重连前先清理旧的浏览器连接对象
+        - 适用于电脑休眠后唤醒的场景（Chrome进程还在，但连接已断开）
+
         Args:
             max_retries: 最大重试次数（默认3次）
 
         Returns:
             bool: True=重连成功, False=重连失败
         """
+        # 第一步：清理旧的浏览器连接
+        print("\n🧹 清理旧的浏览器连接...")
+        try:
+            # 导入BaseFetcher来访问类级别的_browsers字典
+            from fetchers.base_fetcher import BaseFetcher
+
+            # 清空所有旧的浏览器连接
+            if BaseFetcher._browsers:
+                cleared_ports = list(BaseFetcher._browsers.keys())
+                BaseFetcher._browsers.clear()
+                print(f"   ✅ 已清理端口: {cleared_ports}")
+            else:
+                print("   ℹ️ 无旧连接需要清理")
+        except Exception as e:
+            print(f"   ⚠️ 清理旧连接时出错: {e}")
+
         for attempt in range(max_retries):
             try:
                 print("\n" + "="*60)

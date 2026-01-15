@@ -112,13 +112,18 @@ class LegAlertMonitor:
     @staticmethod
     def get_current_minutes():
         """
-        获取当前时间的分钟数
+        获取当前北京时间（UTC+8）的分钟数
+
+        注意：数据中的时间都是北京时间，所以必须用北京时间来比较
 
         Returns:
             int: 从0点开始的分钟数
         """
-        now = datetime.now()
-        return now.hour * 60 + now.minute
+        from datetime import timedelta
+        # 获取UTC时间并转换为北京时间（UTC+8）
+        now_utc = datetime.utcnow()
+        beijing_time = now_utc + timedelta(hours=8)
+        return beijing_time.hour * 60 + beijing_time.minute
 
     def check_out_without_off(self, row, current_minutes):
         """
@@ -239,7 +244,7 @@ class LegAlertMonitor:
         # 计算时间差（从起飞到现在）
         time_diff = current_minutes - off_minutes
 
-        # 如果时间差为负，说明OFF可能在昨天
+        # 如果时间差为负，说明OFF可能在昨天（跨天情况）
         if time_diff < 0:
             time_diff += 24 * 60
 

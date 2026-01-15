@@ -35,9 +35,7 @@ class LegAlertNotifier(BaseNotifier):
             return True
 
         subject = f"⚠️ 航段告警 - {date_str}"
-        body = "检测到以下航班状态异常：\n\n"
-        body += '\n'.join(alerts)
-        body += "\n\n请及时确认飞机状态。"
+        body = '\n'.join(alerts)
 
         return self.send_email(subject, body)
 
@@ -47,7 +45,12 @@ if __name__ == "__main__":
     print("🧪 航段告警邮件通知器测试")
     print("=" * 60)
 
-    notifier = LegAlertNotifier()
+    # 从配置加载器获取Gmail配置
+    from config.config_loader import load_config
+    config_loader = load_config()
+    gmail_config = config_loader.get_gmail_config()
+
+    notifier = LegAlertNotifier(config_dict=gmail_config)
 
     if notifier.is_enabled():
         print("✅ 航段告警邮件通知器已启用")
@@ -56,13 +59,18 @@ if __name__ == "__main__":
 
         # 测试发送告警通知
         test_alerts = [
-            "B-656E 滑出30分钟仍未起飞。请确认飞机状态。",
-            "B-652G 落地30分钟仍未停靠。请确认飞机状态。"
+            "B-656E (VJ105) 滑出30分钟仍未起飞。请确认飞机状态。",
+            "B-652G (VJ106) 起飞140分钟（计划航程110分钟）仍未落地。请确认飞机状态。",
+            "B-656E (VJ118) 落地30分钟仍未停靠。请确认飞机状态。"
         ]
 
         success = notifier.send_alert_notification(test_alerts, "2026-01-15")
         print(f"📤 发送结果: {'成功' if success else '失败'}")
     else:
         print("⚠️ 邮件通知器未启用")
+        print("   请检查环境变量配置：")
+        print("   - GMAIL_SENDER_EMAIL")
+        print("   - GMAIL_APP_PASSWORD")
+        print("   - GMAIL_RECIPIENTS")
 
     print("\n✅ 测试完成")

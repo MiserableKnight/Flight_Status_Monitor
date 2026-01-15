@@ -247,7 +247,7 @@ class LegAlertMonitor:
         threshold = duration_minutes + self.ALERT_THRESHOLD_OFF_ON
         if time_diff >= threshold:
             aircraft = row.get('执飞飞机', '未知飞机')
-            return f"{aircraft} ({flight_number}) 起飞{duration_minutes}分钟（计划航程）仍未落地。请确认飞机状态。"
+            return f"{aircraft} ({flight_number}) 起飞{time_diff}分钟（计划航程{duration_minutes}分钟）仍未落地。请确认飞机状态。"
 
         return None
 

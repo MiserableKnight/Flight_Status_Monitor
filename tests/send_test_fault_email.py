@@ -127,10 +127,6 @@ def send_test_fault_email():
     notifier = FaultStatusNotifier(config_dict=gmail_config)
 
     if notifier.is_enabled():
-        # 添加测试邮件主题标记
-        original_subject = f"故障监控日报 - {target_date}"
-        test_subject = f"[测试] {original_subject}"
-
         # 发送邮件（使用自定义主题）
         try:
             # 直接调用内部方法，使用测试主题

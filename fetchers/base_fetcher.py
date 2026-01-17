@@ -107,7 +107,6 @@ class BaseFetcher(ABC):
         """
         try:
             # 获取所有匹配的备份文件
-            pattern = f"{base_name}_*{extension}"
             backup_files = []
 
             for filename in os.listdir(backup_dir):

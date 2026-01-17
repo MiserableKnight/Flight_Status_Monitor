@@ -7,8 +7,6 @@
 import os
 import sys
 
-import pandas as pd
-
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
@@ -72,19 +70,6 @@ def demonstrate_fix():
 
     print("\n📌 场景: B-656E 只有VJ118数据,已完成")
     print("-" * 60)
-
-    # 模拟数据
-    data = {
-        "执飞飞机": ["B-656E"],
-        "航班号": ["VJ118"],
-        "OUT": ["11:30"],
-        "OFF": ["11:35"],
-        "ON": ["12:00"],
-        "IN": ["12:05"],
-        "起飞机场": ["VVCS-昆仑国际机场"],
-        "着陆机场": ["VVTS-新山一国际机场"],
-    }
-    df = pd.DataFrame(data)
 
     print("\n📋 数据中的航班: VJ118 (昆岛→胡志明,已完成)")
 

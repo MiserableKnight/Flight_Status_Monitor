@@ -383,7 +383,7 @@ class FaultFetcher(BaseFetcher):
 
         # 解析日期
         try:
-            date_obj = datetime.strptime(target_date, "%Y-%m-%d")
+            datetime.strptime(target_date, "%Y-%m-%d")
         except ValueError:
             print(f"   ❌ 日期格式错误: {target_date}")
             return False

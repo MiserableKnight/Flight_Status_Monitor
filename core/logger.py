@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 日志记录模块
 提供统一的日志记录功能，自动清理过期日志
 """
+
 import os
 from datetime import datetime, timedelta
 from typing import Callable
@@ -99,7 +99,7 @@ default_logger = get_logger()
 if __name__ == "__main__":
     # 测试代码
     print("🧪 日志模块测试")
-    print("="*60)
+    print("=" * 60)
 
     log = get_logger()
 

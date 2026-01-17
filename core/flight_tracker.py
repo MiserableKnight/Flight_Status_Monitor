@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 航班状态跟踪器
 实时跟踪每架飞机的航班执行状态
 """
-import re
-import pandas as pd
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Literal
+
+from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, Optional
+
+import pandas as pd
 
 from config.flight_schedule import FlightSchedule
 from core.logger import get_logger
@@ -15,12 +15,13 @@ from core.logger import get_logger
 
 class FlightPhase:
     """航班阶段枚举"""
-    SCHEDULED = "scheduled"           # 计划中（未起飞）
-    PUSHBACK = "pushback"             # 滑出（已滑出但未起飞）
-    AIRBORNE = "airborne"             # 空中（已起飞未落地）
-    LANDED = "landed"                 # 落地（已落地未滑入）
-    IN_GATE = "in_gate"               # 滑入（已完成）
-    UNKNOWN = "unknown"               # 未知状态
+
+    SCHEDULED = "scheduled"  # 计划中（未起飞）
+    PUSHBACK = "pushback"  # 滑出（已滑出但未起飞）
+    AIRBORNE = "airborne"  # 空中（已起飞未落地）
+    LANDED = "landed"  # 落地（已落地未滑入）
+    IN_GATE = "in_gate"  # 滑入（已完成）
+    UNKNOWN = "unknown"  # 未知状态
 
 
 class FlightStatus:
@@ -39,12 +40,12 @@ class FlightStatus:
 
         # 时间信息
         self.scheduled_departure: Optional[datetime] = None  # 计划起飞时间
-        self.scheduled_arrival: Optional[datetime] = None    # 计划到达时间
+        self.scheduled_arrival: Optional[datetime] = None  # 计划到达时间
 
-        self.pushback_time: Optional[datetime] = None        # 实际滑出时间
-        self.takeoff_time: Optional[datetime] = None         # 实际起飞时间
-        self.landing_time: Optional[datetime] = None         # 实际落地时间
-        self.in_gate_time: Optional[datetime] = None         # 实际滑入时间
+        self.pushback_time: Optional[datetime] = None  # 实际滑出时间
+        self.takeoff_time: Optional[datetime] = None  # 实际起飞时间
+        self.landing_time: Optional[datetime] = None  # 实际落地时间
+        self.in_gate_time: Optional[datetime] = None  # 实际滑入时间
 
         # 状态
         self.current_phase = FlightPhase.SCHEDULED
@@ -82,8 +83,12 @@ class FlightStatus:
     def is_on_ground(self) -> bool:
         """判断飞机是否在地面"""
         phase = self.get_flight_phase()
-        return phase in [FlightPhase.SCHEDULED, FlightPhase.PUSHBACK,
-                        FlightPhase.LANDED, FlightPhase.IN_GATE]
+        return phase in [
+            FlightPhase.SCHEDULED,
+            FlightPhase.PUSHBACK,
+            FlightPhase.LANDED,
+            FlightPhase.IN_GATE,
+        ]
 
     def is_completed(self) -> bool:
         """判断航班是否已完成（滑入）"""
@@ -112,10 +117,7 @@ class FlightStatus:
     def calculate_scheduled_arrival(self) -> Optional[datetime]:
         """计算计划到达时间"""
         if self.takeoff_time:
-            return FlightSchedule.calculate_scheduled_arrival(
-                self.flight_number,
-                self.takeoff_time
-            )
+            return FlightSchedule.calculate_scheduled_arrival(self.flight_number, self.takeoff_time)
         return None
 
     def update_status(self, leg_data: Dict):
@@ -128,17 +130,17 @@ class FlightStatus:
         self.last_update_time = datetime.now()
 
         # 更新时间信息
-        if leg_data.get('pushback_time'):
-            self.pushback_time = self._parse_datetime(leg_data['pushback_time'])
+        if leg_data.get("pushback_time"):
+            self.pushback_time = self._parse_datetime(leg_data["pushback_time"])
 
-        if leg_data.get('takeoff_time'):
-            self.takeoff_time = self._parse_datetime(leg_data['takeoff_time'])
+        if leg_data.get("takeoff_time"):
+            self.takeoff_time = self._parse_datetime(leg_data["takeoff_time"])
 
-        if leg_data.get('landing_time'):
-            self.landing_time = self._parse_datetime(leg_data['landing_time'])
+        if leg_data.get("landing_time"):
+            self.landing_time = self._parse_datetime(leg_data["landing_time"])
 
-        if leg_data.get('in_gate_time'):
-            self.in_gate_time = self._parse_datetime(leg_data['in_gate_time'])
+        if leg_data.get("in_gate_time"):
+            self.in_gate_time = self._parse_datetime(leg_data["in_gate_time"])
 
         # 更新当前阶段
         self.current_phase = self.get_flight_phase()
@@ -153,7 +155,7 @@ class FlightStatus:
             return None
         try:
             # 假设时间格式为 YYYY-MM-DD HH:MM
-            return datetime.strptime(time_str, '%Y-%m-%d %H:%M')
+            return datetime.strptime(time_str, "%Y-%m-%d %H:%M")
         except:
             return None
 
@@ -185,11 +187,11 @@ class FlightTracker:
             df = pd.read_csv(self.leg_data_file)
 
             # 按飞机号和日期分组，获取最新状态
-            today = datetime.now().strftime('%Y-%m-%d')
+            today = datetime.now().strftime("%Y-%m-%d")
 
             for _, row in df.iterrows():
-                aircraft = row.get('执飞飞机')
-                flight_number = row.get('航班号')
+                aircraft = row.get("执飞飞机")
+                flight_number = row.get("航班号")
 
                 if not aircraft or not flight_number:
                     continue
@@ -200,7 +202,7 @@ class FlightTracker:
                         continue
 
                 # 只关注今天的航班（CSV列名是中文'日期'）
-                flight_date = row.get('日期')
+                flight_date = row.get("日期")
                 if flight_date != today:
                     continue
 
@@ -210,10 +212,10 @@ class FlightTracker:
 
                 # 转换中文列名为英文键名
                 leg_data = {
-                    'pushback_time': row.get('OUT'),
-                    'takeoff_time': row.get('OFF'),
-                    'landing_time': row.get('ON'),
-                    'in_gate_time': row.get('IN')
+                    "pushback_time": row.get("OUT"),
+                    "takeoff_time": row.get("OFF"),
+                    "landing_time": row.get("ON"),
+                    "in_gate_time": row.get("IN"),
                 }
                 self.flights[aircraft].update_status(leg_data)
 
@@ -228,17 +230,11 @@ class FlightTracker:
 
     def get_all_aircraft_in_air(self) -> List[str]:
         """获取所有在空中的飞机"""
-        return [
-            aircraft for aircraft, status in self.flights.items()
-            if status.is_airborne()
-        ]
+        return [aircraft for aircraft, status in self.flights.items() if status.is_airborne()]
 
     def get_all_aircraft_on_ground(self) -> List[str]:
         """获取所有在地面的飞机"""
-        return [
-            aircraft for aircraft, status in self.flights.items()
-            if status.is_on_ground()
-        ]
+        return [aircraft for aircraft, status in self.flights.items() if status.is_on_ground()]
 
     def needs_fault_monitoring(self, current_time: datetime) -> bool:
         """
@@ -347,8 +343,8 @@ class FlightTracker:
             leg_data_list: leg数据列表（使用中文列名）
         """
         for leg_data in leg_data_list:
-            aircraft = leg_data.get('执飞飞机')
-            flight_number = leg_data.get('航班号')
+            aircraft = leg_data.get("执飞飞机")
+            flight_number = leg_data.get("航班号")
 
             if not aircraft or not flight_number:
                 continue
@@ -359,10 +355,10 @@ class FlightTracker:
 
             # 转换中文列名为英文键名
             converted_leg_data = {
-                'pushback_time': leg_data.get('OUT'),
-                'takeoff_time': leg_data.get('OFF'),
-                'landing_time': leg_data.get('ON'),
-                'in_gate_time': leg_data.get('IN')
+                "pushback_time": leg_data.get("OUT"),
+                "takeoff_time": leg_data.get("OFF"),
+                "landing_time": leg_data.get("ON"),
+                "in_gate_time": leg_data.get("IN"),
             }
 
             self.flights[aircraft].update_status(converted_leg_data)
@@ -372,9 +368,9 @@ class FlightTracker:
     def get_status_summary(self) -> str:
         """获取状态摘要"""
         summary_lines = []
-        summary_lines.append("="*60)
+        summary_lines.append("=" * 60)
         summary_lines.append("📊 航班状态跟踪摘要")
-        summary_lines.append("="*60)
+        summary_lines.append("=" * 60)
 
         for aircraft, status in self.flights.items():
             phase_names = {
@@ -383,7 +379,7 @@ class FlightTracker:
                 FlightPhase.AIRBORNE: "空中",
                 FlightPhase.LANDED: "落地",
                 FlightPhase.IN_GATE: "滑入",
-                FlightPhase.UNKNOWN: "未知"
+                FlightPhase.UNKNOWN: "未知",
             }
 
             phase_name = phase_names.get(status.current_phase, "未知")
@@ -403,14 +399,14 @@ class FlightTracker:
             if status.scheduled_arrival:
                 summary_lines.append(f"   计划到达: {status.scheduled_arrival.strftime('%H:%M')}")
 
-        summary_lines.append("\n" + "="*60)
+        summary_lines.append("\n" + "=" * 60)
         return "\n".join(summary_lines)
 
 
 if __name__ == "__main__":
     # 测试代码
     print("🧪 航班状态跟踪器测试")
-    print("="*60)
+    print("=" * 60)
 
     tracker = FlightTracker()
 

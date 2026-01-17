@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 航段状态邮件通知模块
 专门用于航段(leg)数据的状态变化通知
 """
+
 import os
 import sys
 
@@ -35,7 +35,7 @@ class LegStatusNotifier(BaseNotifier):
             return True
 
         subject = f"航段状态 - {date_str}"
-        body = '\n'.join(status_changes)
+        body = "\n".join(status_changes)
 
         return self.send_email(subject, body)
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
         # 测试发送状态通知
         test_changes = [
             "VJ105（河内-昆岛）已滑出",
-            "VJ107（河内-昆岛）已起飞，预计1小时55分钟后落地"
+            "VJ107（河内-昆岛）已起飞，预计1小时55分钟后落地",
         ]
 
         success = notifier.send_leg_status_notification(test_changes, "2026-01-09")

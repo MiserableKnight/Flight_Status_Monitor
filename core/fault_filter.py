@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 故障过滤模块
 
@@ -8,10 +7,11 @@
 - 支持关联故障过滤规则（同一时间的多个故障组合）
 """
 
-import pandas as pd
-from typing import List, Set
 import os
 from datetime import datetime
+
+import pandas as pd
+
 from core.logger import get_logger
 
 log = get_logger()
@@ -31,7 +31,7 @@ class FaultFilter:
             # 默认使用项目config目录
             # __file__ 位于 core/fault_filter.py，需要向上两级到项目根目录
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            config_dir = os.path.join(project_root, 'config')
+            config_dir = os.path.join(project_root, "config")
 
         self.config_dir = config_dir
         self.single_rules = self._load_single_filter_rules()
@@ -39,13 +39,13 @@ class FaultFilter:
 
     def _load_single_filter_rules(self) -> pd.DataFrame:
         """加载组合过滤规则"""
-        path = os.path.join(self.config_dir, 'fault_filter_rules.csv')
+        path = os.path.join(self.config_dir, "fault_filter_rules.csv")
         if not os.path.exists(path):
             log(f"组合过滤规则文件不存在: {path}", "WARNING")
             return pd.DataFrame()
 
         try:
-            df = pd.read_csv(path, encoding='utf-8-sig')
+            df = pd.read_csv(path, encoding="utf-8-sig")
             log(f"加载组合过滤规则: {len(df)} 条", "INFO")
             return df
         except Exception as e:
@@ -54,13 +54,13 @@ class FaultFilter:
 
     def _load_group_filter_rules(self) -> pd.DataFrame:
         """加载关联故障过滤规则"""
-        path = os.path.join(self.config_dir, 'fault_group_filter_rules.csv')
+        path = os.path.join(self.config_dir, "fault_group_filter_rules.csv")
         if not os.path.exists(path):
             log(f"关联故障过滤规则文件不存在: {path}", "WARNING")
             return pd.DataFrame()
 
         try:
-            df = pd.read_csv(path, encoding='utf-8-sig')
+            df = pd.read_csv(path, encoding="utf-8-sig")
             log(f"加载关联故障过滤规则: {len(df)} 条", "INFO")
             return df
         except Exception as e:
@@ -90,7 +90,10 @@ class FaultFilter:
 
         filtered_count = len(df)
         if original_count > filtered_count:
-            log(f"过滤完成: {original_count} 条 → {filtered_count} 条 (过滤掉 {original_count - filtered_count} 条)", "INFO")
+            log(
+                f"过滤完成: {original_count} 条 → {filtered_count} 条 (过滤掉 {original_count - filtered_count} 条)",
+                "INFO",
+            )
 
         return df
 
@@ -114,7 +117,7 @@ class FaultFilter:
             # 获取规则中所有非空字段
             rule_conditions = []
             for col in df.columns:
-                if col in rule.index and pd.notna(rule[col]) and str(rule[col]).strip() != '':
+                if col in rule.index and pd.notna(rule[col]) and str(rule[col]).strip() != "":
                     rule_value = str(rule[col]).strip()
                     rule_conditions.append((col, rule_value))
 
@@ -164,13 +167,17 @@ class FaultFilter:
         df = df.copy()
 
         # 按机号分组
-        for aircraft, group in df.groupby('机号'):
+        for aircraft, group in df.groupby("机号"):
             # 检查该机号的故障是否匹配任一关联故障规则
             for rule_idx, rule in self.group_rules.iterrows():
                 # 获取规则中定义的所有故障描述（非空）
                 fault_descriptions = []
                 for col in rule.index:
-                    if col.startswith('故障描述') and pd.notna(rule[col]) and str(rule[col]).strip() != '':
+                    if (
+                        col.startswith("故障描述")
+                        and pd.notna(rule[col])
+                        and str(rule[col]).strip() != ""
+                    ):
                         fault_descriptions.append(str(rule[col]).strip())
 
                 if len(fault_descriptions) < 2:
@@ -178,9 +185,9 @@ class FaultFilter:
 
                 # 获取时间间隔阈值（秒）
                 time_threshold = 0
-                if '时间间隔(秒)' in rule.index and pd.notna(rule['时间间隔(秒)']):
+                if "时间间隔(秒)" in rule.index and pd.notna(rule["时间间隔(秒)"]):
                     try:
-                        time_threshold = int(rule['时间间隔(秒)'])
+                        time_threshold = int(rule["时间间隔(秒)"])
                     except (ValueError, TypeError):
                         time_threshold = 0
 
@@ -189,7 +196,7 @@ class FaultFilter:
 
                 # 遍历组内的每一条故障记录
                 for idx, row in group.iterrows():
-                    fault_desc = str(row['描述'])
+                    fault_desc = str(row["描述"])
 
                     # 检查该故障是否匹配规则中的任一故障描述
                     for rule_desc in fault_descriptions:
@@ -211,7 +218,7 @@ class FaultFilter:
                     all_matched_indices = list(set(all_matched_indices))
 
                     # 获取所有匹配故障的触发时间
-                    trigger_times = df.loc[all_matched_indices, '触发时间'].tolist()
+                    trigger_times = df.loc[all_matched_indices, "触发时间"].tolist()
 
                     # 解析时间并计算时间范围
                     try:
@@ -219,12 +226,12 @@ class FaultFilter:
                         parsed_times = []
                         for t in trigger_times:
                             # 尝试解析完整的时间戳
-                            if ' ' in str(t):
-                                parsed_times.append(datetime.strptime(str(t), '%Y-%m-%d %H:%M:%S'))
+                            if " " in str(t):
+                                parsed_times.append(datetime.strptime(str(t), "%Y-%m-%d %H:%M:%S"))
                             else:
                                 # 如果只有时间部分，使用今天日期
-                                time_part = str(t).split('.')[0]  # 去掉可能的毫秒部分
-                                parsed_times.append(datetime.strptime(time_part, '%H:%M:%S'))
+                                time_part = str(t).split(".")[0]  # 去掉可能的毫秒部分
+                                parsed_times.append(datetime.strptime(time_part, "%H:%M:%S"))
 
                         # 计算时间差（秒）
                         if len(parsed_times) > 1:
@@ -233,16 +240,25 @@ class FaultFilter:
                             # 如果时间差小于阈值，则过滤这些故障
                             if time_span <= time_threshold:
                                 indices_to_filter.update(all_matched_indices)
-                                log(f"关联规则 {rule_idx} 匹配机号 {aircraft}: {fault_descriptions}, "
-                                    f"时间跨度 {time_span:.1f}秒 <= {time_threshold}秒, 过滤 {len(all_matched_indices)} 条", "DEBUG")
+                                log(
+                                    f"关联规则 {rule_idx} 匹配机号 {aircraft}: {fault_descriptions}, "
+                                    f"时间跨度 {time_span:.1f}秒 <= {time_threshold}秒, 过滤 {len(all_matched_indices)} 条",
+                                    "DEBUG",
+                                )
                             else:
-                                log(f"关联规则 {rule_idx} 匹配机号 {aircraft}: {fault_descriptions}, "
-                                    f"时间跨度 {time_span:.1f}秒 > {time_threshold}秒, 不予过滤", "DEBUG")
+                                log(
+                                    f"关联规则 {rule_idx} 匹配机号 {aircraft}: {fault_descriptions}, "
+                                    f"时间跨度 {time_span:.1f}秒 > {time_threshold}秒, 不予过滤",
+                                    "DEBUG",
+                                )
                         else:
                             # 只有一个时间点，直接过滤
                             indices_to_filter.update(all_matched_indices)
-                            log(f"关联规则 {rule_idx} 匹配机号 {aircraft}: {fault_descriptions}, "
-                                f"单点时间, 过滤 {len(all_matched_indices)} 条", "DEBUG")
+                            log(
+                                f"关联规则 {rule_idx} 匹配机号 {aircraft}: {fault_descriptions}, "
+                                f"单点时间, 过滤 {len(all_matched_indices)} 条",
+                                "DEBUG",
+                            )
                     except Exception as e:
                         log(f"解析时间失败: {e}, 跳过该规则", "WARNING")
 
@@ -262,6 +278,6 @@ class FaultFilter:
             dict: 包含规则数量的字典
         """
         return {
-            'single_filter_rules': len(self.single_rules),
-            'group_filter_rules': len(self.group_rules)
+            "single_filter_rules": len(self.single_rules),
+            "group_filter_rules": len(self.group_rules),
         }

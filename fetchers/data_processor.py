@@ -1,21 +1,26 @@
-# -*- coding: utf-8 -*-
 """
 数据处理模块
 负责CSV文件的更新、累计值计算和备份
 """
+
 import csv
 import os
 import shutil
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
 from ..core.logger import get_logger
 
 
 class DataProcessor:
     """数据处理器类"""
 
-    def __init__(self, data_dir: str = "data", backup_dir: str = "data/backup",
-                 daily_raw_dir: str = "data/daily_raw"):
+    def __init__(
+        self,
+        data_dir: str = "data",
+        backup_dir: str = "data/backup",
+        daily_raw_dir: str = "data/daily_raw",
+    ):
         """
         初始化数据处理器
 
@@ -57,7 +62,7 @@ class DataProcessor:
         filepath = os.path.join(self.daily_raw_dir, filename)
 
         try:
-            with open(filepath, 'w', newline='', encoding='utf-8-sig') as f:
+            with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
                 writer = csv.writer(f)
                 writer.writerows(data)
 
@@ -82,7 +87,7 @@ class DataProcessor:
             return None
 
         try:
-            with open(filepath, 'r', encoding='utf-8-sig') as f:
+            with open(filepath, encoding="utf-8-sig") as f:
                 reader = csv.reader(f)
                 data = list(reader)
             return data
@@ -107,7 +112,7 @@ class DataProcessor:
             # 检查文件是否存在，不存在则创建并写入表头
             file_exists = os.path.exists(master_path)
 
-            with open(master_path, 'a', newline='', encoding='utf-8-sig') as f:
+            with open(master_path, "a", newline="", encoding="utf-8-sig") as f:
                 writer = csv.writer(f)
 
                 # 如果文件不存在，写入表头（假设data第一行是表头）
@@ -124,8 +129,9 @@ class DataProcessor:
             self.log(f"追加数据失败: {e}", "ERROR")
             return False
 
-    def calculate_cumulative_values(self, master_filename: str,
-                                    air_time_col: int = 0, block_time_col: int = 1) -> Dict[str, float]:
+    def calculate_cumulative_values(
+        self, master_filename: str, air_time_col: int = 0, block_time_col: int = 1
+    ) -> Dict[str, float]:
         """
         计算累计值（例如累计飞行时间）
 
@@ -140,13 +146,13 @@ class DataProcessor:
         master_path = os.path.join(self.data_dir, master_filename)
 
         if not os.path.exists(master_path):
-            return {'total_air_time': 0.0, 'total_block_time': 0.0}
+            return {"total_air_time": 0.0, "total_block_time": 0.0}
 
         try:
             total_air_time = 0.0
             total_block_time = 0.0
 
-            with open(master_path, 'r', encoding='utf-8-sig') as f:
+            with open(master_path, encoding="utf-8-sig") as f:
                 reader = csv.reader(f)
                 next(reader, None)  # 跳过表头
 
@@ -161,13 +167,13 @@ class DataProcessor:
                             continue
 
             return {
-                'total_air_time': round(total_air_time, 2),
-                'total_block_time': round(total_block_time, 2)
+                "total_air_time": round(total_air_time, 2),
+                "total_block_time": round(total_block_time, 2),
             }
 
         except Exception as e:
             self.log(f"计算累计值失败: {e}", "ERROR")
-            return {'total_air_time': 0.0, 'total_block_time': 0.0}
+            return {"total_air_time": 0.0, "total_block_time": 0.0}
 
     def backup_file(self, filepath: str) -> Optional[str]:
         """
@@ -247,24 +253,26 @@ class DataProcessor:
         latest_file = max(files, key=os.path.getmtime)
 
         return {
-            'filename': os.path.basename(latest_file),
-            'path': latest_file,
-            'mtime': datetime.fromtimestamp(os.path.getmtime(latest_file)).strftime("%Y-%m-%d %H:%M:%S")
+            "filename": os.path.basename(latest_file),
+            "path": latest_file,
+            "mtime": datetime.fromtimestamp(os.path.getmtime(latest_file)).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
         }
 
 
 if __name__ == "__main__":
     # 测试代码
     print("🧪 数据处理器测试")
-    print("="*60)
+    print("=" * 60)
 
     processor = DataProcessor()
 
     # 测试数据
     test_data = [
-        ['air_time', 'block_time', 'fc', 'flight_leg'],
-        ['10.5', '12.3', 'C909', 'SHA-PEK'],
-        ['8.2', '9.8', 'C909', 'PEK-SHA']
+        ["air_time", "block_time", "fc", "flight_leg"],
+        ["10.5", "12.3", "C909", "SHA-PEK"],
+        ["8.2", "9.8", "C909", "PEK-SHA"],
     ]
 
     # 保存原始数据

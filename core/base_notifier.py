@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 邮件通知器基类
 
@@ -11,15 +10,17 @@
 子类只需实现：
 - 专用的通知方法（如 send_leg_status_notification）
 """
-import smtplib
+
 import os
-import yaml
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
-from typing import List, Optional
+import smtplib
+from abc import ABC
 from datetime import datetime
-from abc import ABC, abstractmethod
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import List
+
+import yaml
 
 from .logger import get_logger
 
@@ -74,18 +75,18 @@ class BaseNotifier(ABC):
 
         # 映射 config.ini 的字段名到内部格式
         mapped_config = {
-            'smtp_server': 'smtp.gmail.com',
-            'smtp_port': 587,
-            'smtp_user': config_dict.get('sender_email', ''),
-            'smtp_password': config_dict.get('app_password', ''),
-            'receiver_email': ', '.join(config_dict.get('recipients', [])),
-            'sender_name': config_dict.get('sender_name', '航班监控系统'),
-            'use_ssl': False,
-            'use_tls': True
+            "smtp_server": "smtp.gmail.com",
+            "smtp_port": 587,
+            "smtp_user": config_dict.get("sender_email", ""),
+            "smtp_password": config_dict.get("app_password", ""),
+            "receiver_email": ", ".join(config_dict.get("recipients", [])),
+            "sender_name": config_dict.get("sender_name", "航班监控系统"),
+            "use_ssl": False,
+            "use_tls": True,
         }
 
         # 验证必需字段
-        if not mapped_config['smtp_user'] or not mapped_config['smtp_password']:
+        if not mapped_config["smtp_user"] or not mapped_config["smtp_password"]:
             self.log("配置缺少必需字段: sender_email 或 app_password", "ERROR")
             return None
 
@@ -103,19 +104,25 @@ class BaseNotifier(ABC):
         """
         if config_file is None:
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            config_file = os.path.join(project_root, 'email_config.yaml')
+            config_file = os.path.join(project_root, "email_config.yaml")
 
         if not os.path.exists(config_file):
             self.log(f"配置文件不存在: {config_file}", "ERROR")
             return None
 
         try:
-            with open(config_file, 'r', encoding='utf-8') as f:
+            with open(config_file, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             # 验证必需的配置项
-            email_config = config.get('email', {})
-            required_fields = ['smtp_server', 'smtp_port', 'smtp_user', 'smtp_password', 'receiver_email']
+            email_config = config.get("email", {})
+            required_fields = [
+                "smtp_server",
+                "smtp_port",
+                "smtp_user",
+                "smtp_password",
+                "receiver_email",
+            ]
 
             for field in required_fields:
                 if not email_config.get(field):
@@ -156,45 +163,49 @@ class BaseNotifier(ABC):
         try:
             # 创建邮件对象
             msg = MIMEMultipart()
-            msg['From'] = f"{self.config.get('sender_name', '航班状态监控系统')} <{self.config['smtp_user']}>"
-            msg['To'] = self.config['receiver_email']
-            msg['Subject'] = subject
+            msg["From"] = (
+                f"{self.config.get('sender_name', '航班状态监控系统')} <{self.config['smtp_user']}>"
+            )
+            msg["To"] = self.config["receiver_email"]
+            msg["Subject"] = subject
 
             # 添加邮件正文
-            msg.attach(MIMEText(body, 'plain', 'utf-8'))
+            msg.attach(MIMEText(body, "plain", "utf-8"))
 
             # 添加附件
             if attachments:
                 for file_path in attachments:
                     if os.path.exists(file_path):
-                        with open(file_path, 'rb') as f:
+                        with open(file_path, "rb") as f:
                             part = MIMEApplication(f.read(), Name=os.path.basename(file_path))
-                        part['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
+                        part["Content-Disposition"] = (
+                            f'attachment; filename="{os.path.basename(file_path)}"'
+                        )
                         msg.attach(part)
                     else:
                         self.log(f"附件不存在: {file_path}", "WARNING")
 
             # 连接到SMTP服务器
-            smtp_server = self.config['smtp_server']
-            smtp_port = self.config['smtp_port']
+            smtp_server = self.config["smtp_server"]
+            smtp_port = self.config["smtp_port"]
 
             print(f"📧 正在连接SMTP服务器: {smtp_server}:{smtp_port}")
             print(f"📤 发件人: {self.config['smtp_user']}")
             print(f"📥 收件人: {self.config['receiver_email']}")
 
-            if self.config.get('use_ssl', False):
+            if self.config.get("use_ssl", False):
                 # SSL连接
                 with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
-                    server.login(self.config['smtp_user'], self.config['smtp_password'])
+                    server.login(self.config["smtp_user"], self.config["smtp_password"])
                     server.send_message(msg)
-                    print(f"✅ 邮件已通过SSL发送")
+                    print("✅ 邮件已通过SSL发送")
             else:
                 # TLS连接
                 with smtplib.SMTP(smtp_server, smtp_port) as server:
                     server.starttls()
-                    server.login(self.config['smtp_user'], self.config['smtp_password'])
+                    server.login(self.config["smtp_user"], self.config["smtp_password"])
                     server.send_message(msg)
-                    print(f"✅ 邮件已通过TLS发送")
+                    print("✅ 邮件已通过TLS发送")
 
             self.log(f"邮件发送成功: {subject}", "SUCCESS")
             return True
@@ -278,30 +289,30 @@ class BaseNotifier(ABC):
         subject = f"📊 数据抓取汇总报告 - {report_data.get('date', '')}"
 
         body_lines = [
-            f"数据抓取汇总报告",
+            "数据抓取汇总报告",
             f"报告日期: {report_data.get('date', '')}",
-            f"",
-            f"【航班数据】",
+            "",
+            "【航班数据】",
             f"  抓取次数: {report_data.get('flight_fetch_count', 0)}",
             f"  成功次数: {report_data.get('flight_success_count', 0)}",
             f"  失败次数: {report_data.get('flight_failure_count', 0)}",
-            f"",
-            f"【故障数据】",
+            "",
+            "【故障数据】",
             f"  抓取次数: {report_data.get('faults_fetch_count', 0)}",
             f"  成功次数: {report_data.get('faults_success_count', 0)}",
             f"  失败次数: {report_data.get('faults_failure_count', 0)}",
-            f"",
-            f"【累计数据】",
+            "",
+            "【累计数据】",
             f"  航班累计飞行时间: {report_data.get('total_air_time', 'N/A')} 小时",
             f"  航班累计轮挡时间: {report_data.get('total_block_time', 'N/A')} 小时",
             f"  故障累计记录数: {report_data.get('total_faults_count', 'N/A')} 条",
         ]
 
-        body = '\n'.join(body_lines)
+        body = "\n".join(body_lines)
 
         # 添加附件
         attachments = []
-        for key in ['flight_data_file', 'faults_data_file']:
+        for key in ["flight_data_file", "faults_data_file"]:
             file_path = report_data.get(key)
             if file_path and os.path.exists(file_path):
                 attachments.append(file_path)

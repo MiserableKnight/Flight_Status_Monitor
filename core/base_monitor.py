@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 状态监控基类
 
@@ -15,20 +14,21 @@
 - get_content_hash(): 获取内容哈希值
 - send_notification(): 发送通知
 """
+
+import json
 import os
 import sys
-import json
-import hashlib
 from abc import ABC, abstractmethod
 from datetime import datetime
+
 import pandas as pd
 
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from core.logger import get_logger
 from config.config_loader import load_config
+from core.logger import get_logger
 
 
 class BaseStatusMonitor(ABC):
@@ -50,7 +50,7 @@ class BaseStatusMonitor(ABC):
         Args:
             target_date: 目标日期（YYYY-MM-DD格式），默认为今天
         """
-        self.target_date = target_date or datetime.now().strftime('%Y-%m-%d')
+        self.target_date = target_date or datetime.now().strftime("%Y-%m-%d")
         self.log = get_logger()
         self.config_loader = load_config()
         self.gmail_config = self.config_loader.get_gmail_config()
@@ -60,7 +60,7 @@ class BaseStatusMonitor(ABC):
 
     def _ensure_data_dir(self):
         """确保数据目录存在"""
-        data_dir = os.path.join(project_root, 'data')
+        data_dir = os.path.join(project_root, "data")
         os.makedirs(data_dir, exist_ok=True)
 
     @abstractmethod
@@ -168,9 +168,9 @@ class BaseStatusMonitor(ABC):
             return None
 
         try:
-            with open(status_file, 'r', encoding='utf-8') as f:
+            with open(status_file, encoding="utf-8") as f:
                 status_data = json.load(f)
-                print(f"   📋 上次状态已加载")
+                print("   📋 上次状态已加载")
                 return status_data
         except Exception as e:
             print(f"   ⚠️ 读取上次状态失败: {e}")
@@ -191,16 +191,16 @@ class BaseStatusMonitor(ABC):
             os.makedirs(os.path.dirname(status_file), exist_ok=True)
 
             status_data = {
-                'status_hash': status_hash,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'date': self.target_date,
-                **metadata
+                "status_hash": status_hash,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "date": self.target_date,
+                **metadata,
             }
 
-            with open(status_file, 'w', encoding='utf-8') as f:
+            with open(status_file, "w", encoding="utf-8") as f:
                 json.dump(status_data, f, ensure_ascii=False, indent=2)
 
-            print(f"   💾 已保存当前状态")
+            print("   💾 已保存当前状态")
             self.log(f"状态已保存: {status_file}")
         except Exception as e:
             print(f"   ⚠️ 保存状态失败: {e}")
@@ -218,19 +218,19 @@ class BaseStatusMonitor(ABC):
             bool: 状态变化返回 True，否则返回 False
         """
         if last_status is None:
-            print(f"   ✅ 首次运行，需要发送通知")
+            print("   ✅ 首次运行，需要发送通知")
             return True
 
-        last_hash = last_status.get('status_hash')
+        last_hash = last_status.get("status_hash")
         print(f"   📊 上次状态哈希: {last_hash}")
         print(f"   📊 当前状态哈希: {current_hash}")
 
         if current_hash == last_hash:
-            print(f"\n   ℹ️ 状态无变化，跳过通知")
+            print("\n   ℹ️ 状态无变化，跳过通知")
             self.log("状态无变化，跳过通知")
             return False
 
-        print(f"\n   ✅ 检测到状态变化")
+        print("\n   ✅ 检测到状态变化")
         return True
 
     def monitor(self):
@@ -285,16 +285,15 @@ class BaseStatusMonitor(ABC):
         try:
             success = self.send_notification(content)
             if success:
-                print(f"   ✅ 通知发送成功")
+                print("   ✅ 通知发送成功")
 
                 # 7. 保存当前状态
                 self.save_current_status(
-                    current_hash,
-                    content=content if isinstance(content, str) else None
+                    current_hash, content=content if isinstance(content, str) else None
                 )
                 return True
             else:
-                print(f"   ⚠️ 通知发送失败")
+                print("   ⚠️ 通知发送失败")
                 return False
         except Exception as e:
             print(f"❌ 发送通知失败：{e}")

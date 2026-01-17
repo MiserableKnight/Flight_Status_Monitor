@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 任务邮件通知模块
 用于数据抓取任务的成功/失败通知和汇总报告
 """
+
 import os
 import sys
 from typing import List
@@ -22,8 +22,13 @@ class TaskNotifier(BaseNotifier):
     - 数据抓取汇总报告
     """
 
-    def __init__(self, sender_email: str = None, app_password: str = None,
-                 recipients: List[str] = None, config: dict = None):
+    def __init__(
+        self,
+        sender_email: str = None,
+        app_password: str = None,
+        recipients: List[str] = None,
+        config: dict = None,
+    ):
         """
         初始化任务通知器
 
@@ -39,10 +44,10 @@ class TaskNotifier(BaseNotifier):
         elif sender_email or app_password or recipients:
             # 从单独参数构建配置字典
             config_dict = {
-                'sender_email': sender_email,
-                'app_password': app_password,
-                'recipients': recipients or [],
-                'sender_name': '航班监控系统'
+                "sender_email": sender_email,
+                "app_password": app_password,
+                "recipients": recipients or [],
+                "sender_name": "航班监控系统",
             }
         else:
             config_dict = None

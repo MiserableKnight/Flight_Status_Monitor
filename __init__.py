@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Flight Status Monitor - 航班状态监控系统
 

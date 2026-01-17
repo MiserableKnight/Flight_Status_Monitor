@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 航段数据监控启动器
 
 解决相对导入问题，使用模块方式运行调度器
 """
+
 import sys
-import os
 from pathlib import Path
 
 # 确保项目根目录在Python路径中
@@ -15,4 +14,5 @@ sys.path.insert(0, str(project_root))
 if __name__ == "__main__":
     # 使用模块方式运行，避免相对导入问题
     import schedulers.leg_scheduler as leg_module
+
     leg_module.main()

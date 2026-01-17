@@ -1,10 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 航班计划时间配置
 所有时间均为越南时间（北京时间-1小时）
 """
-from typing import Dict, List, Optional
+
 from datetime import datetime, timedelta
+from typing import Dict, List, Optional
 
 
 class FlightSchedule:
@@ -26,70 +26,70 @@ class FlightSchedule:
     #
     # 时间转换：越南时间 + 1小时 = 北京时间
     FLIGHT_SCHEDULES = {
-        'VJ105': {
-            'scheduled_departure': '07:45',  # 北京时间 (06:45越南时间 + 1)
-            'duration_minutes': 110,
-            'route': 'HAN-VCS',  # 河内 → 昆岛
-            'departure_airport': 'VVNB-内排国际机场',
-            'arrival_airport': 'VVCS-昆仑国际机场'
+        "VJ105": {
+            "scheduled_departure": "07:45",  # 北京时间 (06:45越南时间 + 1)
+            "duration_minutes": 110,
+            "route": "HAN-VCS",  # 河内 → 昆岛
+            "departure_airport": "VVNB-内排国际机场",
+            "arrival_airport": "VVCS-昆仑国际机场",
         },
-        'VJ107': {
-            'scheduled_departure': '09:15',  # 北京时间 (08:15越南时间 + 1)
-            'duration_minutes': 110,
-            'route': 'HAN-VCS',  # 河内 → 昆岛
-            'departure_airport': 'VVNB-内排国际机场',
-            'arrival_airport': 'VVCS-昆仑国际机场'
+        "VJ107": {
+            "scheduled_departure": "09:15",  # 北京时间 (08:15越南时间 + 1)
+            "duration_minutes": 110,
+            "route": "HAN-VCS",  # 河内 → 昆岛
+            "departure_airport": "VVNB-内排国际机场",
+            "arrival_airport": "VVCS-昆仑国际机场",
         },
-        'VJ112': {
-            'scheduled_departure': '10:20',  # 北京时间 (09:20越南时间 + 1)
-            'duration_minutes': 30,
-            'route': 'VCS-SGN',  # 昆岛 → 胡志明
-            'departure_airport': 'VVCS-昆仑国际机场',
-            'arrival_airport': 'VVTS-新山一国际机场'
+        "VJ112": {
+            "scheduled_departure": "10:20",  # 北京时间 (09:20越南时间 + 1)
+            "duration_minutes": 30,
+            "route": "VCS-SGN",  # 昆岛 → 胡志明
+            "departure_airport": "VVCS-昆仑国际机场",
+            "arrival_airport": "VVTS-新山一国际机场",
         },
-        'VJ113': {
-            'scheduled_departure': '12:00',  # 北京时间 (11:00越南时间 + 1)
-            'duration_minutes': 30,
-            'route': 'SGN-VCS',  # 胡志明 → 昆岛
-            'departure_airport': 'VVTS-新山一国际机场',
-            'arrival_airport': 'VVCS-昆仑国际机场'
+        "VJ113": {
+            "scheduled_departure": "12:00",  # 北京时间 (11:00越南时间 + 1)
+            "duration_minutes": 30,
+            "route": "SGN-VCS",  # 胡志明 → 昆岛
+            "departure_airport": "VVTS-新山一国际机场",
+            "arrival_airport": "VVCS-昆仑国际机场",
         },
-        'VJ118': {
-            'scheduled_departure': '12:00',  # 北京时间 (11:00越南时间 + 1)
-            'duration_minutes': 30,
-            'route': 'VCS-SGN',  # 昆岛 → 胡志明
-            'departure_airport': 'VVCS-昆仑国际机场',
-            'arrival_airport': 'VVTS-新山一国际机场'
+        "VJ118": {
+            "scheduled_departure": "12:00",  # 北京时间 (11:00越南时间 + 1)
+            "duration_minutes": 30,
+            "route": "VCS-SGN",  # 昆岛 → 胡志明
+            "departure_airport": "VVCS-昆仑国际机场",
+            "arrival_airport": "VVTS-新山一国际机场",
         },
-        'VJ106': {
-            'scheduled_departure': '13:05',  # 北京时间 (12:05越南时间 + 1)
-            'duration_minutes': 110,
-            'route': 'VCS-HAN',  # 昆岛 → 河内
-            'departure_airport': 'VVCS-昆仑国际机场',
-            'arrival_airport': 'VVNB-内排国际机场'
+        "VJ106": {
+            "scheduled_departure": "13:05",  # 北京时间 (12:05越南时间 + 1)
+            "duration_minutes": 110,
+            "route": "VCS-HAN",  # 昆岛 → 河内
+            "departure_airport": "VVCS-昆仑国际机场",
+            "arrival_airport": "VVNB-内排国际机场",
         },
-        'VJ119': {
-            'scheduled_departure': '13:30',  # 北京时间 (12:30越南时间 + 1)
-            'duration_minutes': 30,
-            'route': 'SGN-VCS',  # 胡志明 → 昆岛
-            'departure_airport': 'VVTS-新山一国际机场',
-            'arrival_airport': 'VVCS-昆仑国际机场'
+        "VJ119": {
+            "scheduled_departure": "13:30",  # 北京时间 (12:30越南时间 + 1)
+            "duration_minutes": 30,
+            "route": "SGN-VCS",  # 胡志明 → 昆岛
+            "departure_airport": "VVTS-新山一国际机场",
+            "arrival_airport": "VVCS-昆仑国际机场",
         },
-        'VJ108': {
-            'scheduled_departure': '15:00',  # 北京时间 (14:00越南时间 + 1)
-            'duration_minutes': 110,
-            'route': 'VCS-HAN',  # 昆岛 → 河内
-            'departure_airport': 'VVCS-昆仑国际机场',
-            'arrival_airport': 'VVNB-内排国际机场'
-        }
+        "VJ108": {
+            "scheduled_departure": "15:00",  # 北京时间 (14:00越南时间 + 1)
+            "duration_minutes": 110,
+            "route": "VCS-HAN",  # 昆岛 → 河内
+            "departure_airport": "VVCS-昆仑国际机场",
+            "arrival_airport": "VVNB-内排国际机场",
+        },
     }
 
     # 航线链配置
     # 每条航线链是一组必须按顺序执行的航班,最终都回到河内
     # 只有完成航线链的最后一个航班,才算完成当日任务
     ROUTE_CHAINS = {
-        'ROUTE_A': ['VJ105', 'VJ112', 'VJ113', 'VJ106'],  # 河内→昆岛→胡志明→昆岛→河内
-        'ROUTE_B': ['VJ107', 'VJ118', 'VJ119', 'VJ108']   # 河内→昆岛→胡志明→昆岛→河内
+        "ROUTE_A": ["VJ105", "VJ112", "VJ113", "VJ106"],  # 河内→昆岛→胡志明→昆岛→河内
+        "ROUTE_B": ["VJ107", "VJ118", "VJ119", "VJ108"],  # 河内→昆岛→胡志明→昆岛→河内
     }
 
     @classmethod
@@ -135,7 +135,9 @@ class FlightSchedule:
         return False
 
     @classmethod
-    def calculate_scheduled_arrival(cls, flight_number: str, actual_departure_time: datetime) -> datetime:
+    def calculate_scheduled_arrival(
+        cls, flight_number: str, actual_departure_time: datetime
+    ) -> datetime:
         """
         根据实际起飞时间计算计划到达时间
 
@@ -150,7 +152,7 @@ class FlightSchedule:
         if not flight_info:
             raise ValueError(f"未知航班号: {flight_number}")
 
-        duration = flight_info['duration_minutes']
+        duration = flight_info["duration_minutes"]
         return actual_departure_time + timedelta(minutes=duration)
 
     @classmethod
@@ -172,12 +174,14 @@ class FlightSchedule:
         if base_date is None:
             base_date = datetime.now()
 
-        hour, minute = map(int, time_str.split(':'))
+        hour, minute = map(int, time_str.split(":"))
         # 直接使用配置时间，就是北京时间
         return base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
     @classmethod
-    def get_scheduled_departure_datetime(cls, flight_number: str, base_date: datetime = None) -> datetime:
+    def get_scheduled_departure_datetime(
+        cls, flight_number: str, base_date: datetime = None
+    ) -> datetime:
         """
         获取航班计划起飞时间的datetime对象
 
@@ -192,7 +196,7 @@ class FlightSchedule:
         if not flight_info:
             raise ValueError(f"未知航班号: {flight_number}")
 
-        return cls.parse_scheduled_time(flight_info['scheduled_departure'], base_date)
+        return cls.parse_scheduled_time(flight_info["scheduled_departure"], base_date)
 
     @classmethod
     def to_vietnam_time(cls, beijing_dt: datetime) -> datetime:
@@ -208,7 +212,7 @@ class FlightSchedule:
         return beijing_dt - timedelta(hours=1)
 
     @classmethod
-    def format_vietnam_time(cls, beijing_dt: datetime, format_str: str = '%H:%M') -> str:
+    def format_vietnam_time(cls, beijing_dt: datetime, format_str: str = "%H:%M") -> str:
         """
         格式化北京时间为越南时间字符串（用于邮件展示）
 
@@ -226,11 +230,11 @@ class FlightSchedule:
 if __name__ == "__main__":
     # 测试代码
     print("🧪 航班计划时间配置测试")
-    print("="*60)
+    print("=" * 60)
 
     # 显示所有航班信息
     print("\n📋 所有航班计划:")
-    print("-"*60)
+    print("-" * 60)
     for flight_num in FlightSchedule.get_all_flights():
         info = FlightSchedule.get_flight_info(flight_num)
         print(f"{flight_num}:")
@@ -241,8 +245,8 @@ if __name__ == "__main__":
 
     # 测试计划到达时间计算
     print("🧮 计划到达时间计算测试:")
-    print("-"*60)
-    test_flight = 'VJ105'
+    print("-" * 60)
+    test_flight = "VJ105"
     test_departure = datetime(2026, 1, 9, 6, 45)  # 北京时间
     scheduled_arrival = FlightSchedule.calculate_scheduled_arrival(test_flight, test_departure)
     print(f"{test_flight} 实际起飞: {test_departure.strftime('%H:%M')} (北京时间)")

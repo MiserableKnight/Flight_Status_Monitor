@@ -1,11 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 登录管理模块
 封装系统登录逻辑
 """
-from DrissionPage import ChromiumPage
+
 import time
 from typing import Dict
+
+from DrissionPage import ChromiumPage
+
 from ..core.logger import get_logger
 
 
@@ -19,8 +21,8 @@ class LoginManager:
         Args:
             credentials: 登录凭证字典 {'username': 'xxx', 'password': 'xxx'}
         """
-        self.username = credentials.get('username', '') if credentials else ''
-        self.password = credentials.get('password', '') if credentials else ''
+        self.username = credentials.get("username", "") if credentials else ""
+        self.password = credentials.get("password", "") if credentials else ""
         self.log = get_logger()
 
     def perform_login(self, page: ChromiumPage) -> bool:
@@ -41,21 +43,21 @@ class LoginManager:
             print("🔒 开始登录流程...")
 
             # A. 填账号
-            user_ele = page.ele('tag:input@@placeholder=请输入账号')
+            user_ele = page.ele("tag:input@@placeholder=请输入账号")
             if not user_ele:
-                user_ele = page.ele('tag:input@@type=text')
+                user_ele = page.ele("tag:input@@type=text")
 
             if user_ele:
                 user_ele.clear()
                 user_ele.input(self.username)
                 # 点击空白处消除干扰
                 try:
-                    page.ele('text:FLYWIN').click(by_js=True)
+                    page.ele("text:FLYWIN").click(by_js=True)
                 except:
                     pass
 
             # B. 填密码
-            pwd_ele = page.ele('#loginPwd')
+            pwd_ele = page.ele("#loginPwd")
             if pwd_ele:
                 pwd_ele.clear()
                 pwd_ele.input(self.password)
@@ -63,7 +65,7 @@ class LoginManager:
 
                 # C. 提交（使用回车键）
                 print("   ⚡ 发送【回车键】提交登录...")
-                pwd_ele.input('\n')
+                pwd_ele.input("\n")
             else:
                 print("❌ 找不到密码框")
                 return False
@@ -75,10 +77,10 @@ class LoginManager:
 
             for i in range(max_wait):
                 # 情况 A: 出现中间页的 "WEB" 按钮
-                web_btn = page.ele('text:WEB')
+                web_btn = page.ele("text:WEB")
 
                 if web_btn and web_btn.states.is_displayed:
-                    print(f"   👀 第 {i+1}秒: 检测到中间页 'WEB' 按钮！")
+                    print(f"   👀 第 {i + 1}秒: 检测到中间页 'WEB' 按钮！")
                     print("   👉 正在点击 'WEB' 进入系统...")
                     web_btn.click(by_js=True)
                     time.sleep(1)
@@ -86,14 +88,14 @@ class LoginManager:
 
                 # 情况 B: 已经成功到达首页 (index.html)
                 if "mainController/index.html" in page.url:
-                    print(f"   ✅ 第 {i+1}秒: 成功抵达首页！")
+                    print(f"   ✅ 第 {i + 1}秒: 成功抵达首页！")
                     found_target = True
                     break
 
                 # 情况 C: 还在登录页（可能卡住了）
-                if page.ele('#loginPwd') and i > 10:
+                if page.ele("#loginPwd") and i > 10:
                     print("   ⚠️ 似乎还停留在登录页，尝试补按一次回车...")
-                    page.ele('#loginPwd').input('\n')
+                    page.ele("#loginPwd").input("\n")
 
                 # 还没刷出来，打印个点，等1秒
                 print(".", end="", flush=True)
@@ -126,18 +128,20 @@ class LoginManager:
         Returns:
             bool: 是否需要登录
         """
-        return page.ele('#loginPwd') is not None
+        return page.ele("#loginPwd") is not None
 
 
 if __name__ == "__main__":
     # 测试代码
     print("🧪 登录管理器测试")
-    print("="*60)
+    print("=" * 60)
 
-    import sys
     import os
+    import sys
+
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from config.config_loader import load_config
+
     from ..core.browser_handler import BrowserHandler
 
     config_loader = load_config()
@@ -145,7 +149,7 @@ if __name__ == "__main__":
     paths = config_loader.get_paths()
 
     login_manager = LoginManager(credentials)
-    browser = BrowserHandler(user_data_path=paths['user_data_path'])
+    browser = BrowserHandler(user_data_path=paths["user_data_path"])
 
     if browser.connect():
         page = browser.get_page()

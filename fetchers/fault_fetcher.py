@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 故障数据监控模块（完整版）
 
@@ -10,9 +9,10 @@
 - 获取并保存故障数据
 - 支持与 leg_fetcher 并行运行，共享同一个浏览器实例
 """
-import time
-import sys
+
 import os
+import sys
+import time
 from datetime import datetime
 
 # 添加项目根目录到路径
@@ -20,8 +20,8 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 from fetchers.base_fetcher import BaseFetcher
-from fetchers.fault_parser import FaultParser
 from fetchers.fault_data_saver import FaultDataSaver
+from fetchers.fault_parser import FaultParser
 
 
 class FaultFetcher(BaseFetcher):
@@ -76,19 +76,19 @@ class FaultFetcher(BaseFetcher):
         Returns:
             bool: True 表示已初始化，False 表示需要初始化
         """
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🔍 检查初始化状态")
-        print("="*60)
+        print("=" * 60)
 
         if self._initialized:
-            print(f"   ✅ 已初始化")
-            print(f"   ⚡ 使用快速刷新模式")
-            print("="*60)
+            print("   ✅ 已初始化")
+            print("   ⚡ 使用快速刷新模式")
+            print("=" * 60)
             return True
         else:
-            print(f"   ❌ 未初始化")
-            print(f"   → 需要执行首次初始化（选择机号、点击历史、设置日期）")
-            print("="*60)
+            print("   ❌ 未初始化")
+            print("   → 需要执行首次初始化（选择机号、点击历史、设置日期）")
+            print("=" * 60)
             return False
 
     def navigate_to_target_page(self, page, target_date, aircraft_list=None):
@@ -103,7 +103,7 @@ class FaultFetcher(BaseFetcher):
         Returns:
             成功返回数据列表，失败返回 None
         """
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🚀 故障数据抓取启动")
         print(f"⏰ 启动时间: {time.strftime('%H:%M:%S')}")
         print(f"📅 目标日期: {target_date}")
@@ -113,7 +113,7 @@ class FaultFetcher(BaseFetcher):
             self._target_aircrafts = aircraft_list
         else:
             self._target_aircrafts = []
-        print("="*60)
+        print("=" * 60)
 
         # 故障监控页面URL
         target_url = "https://cis.comac.cc:8004/caphm/integratedMonitorController/list.html?gzphFlag=1&faultType=1,2"
@@ -124,7 +124,7 @@ class FaultFetcher(BaseFetcher):
 
         if "integratedMonitorController/list.html" not in current_url:
             # 需要导航到故障监控页面
-            print(f"🎯 导航到故障监控页面...")
+            print("🎯 导航到故障监控页面...")
             try:
                 page.get(target_url)
                 print("   ✅ 已导航到故障监控页面")
@@ -136,26 +136,26 @@ class FaultFetcher(BaseFetcher):
                     current_url_after_nav = page.url
                     if "integratedMonitorController" in current_url_after_nav:
                         # 再检查机号下拉框是否已加载
-                        dropdown = page.ele('tag:div@@class=filter-option')
+                        dropdown = page.ele("tag:div@@class=filter-option")
                         if dropdown:
-                            print(f"   ✅ 页面加载完成 (耗时: {i+1}秒)")
+                            print(f"   ✅ 页面加载完成 (耗时: {i + 1}秒)")
                             print(f"   📍 当前URL: {current_url_after_nav}")
                             break
-                    print(f"   ⏳ 加载中... URL: {current_url_after_nav[:80]}... ({i+1}/10秒)")
+                    print(f"   ⏳ 加载中... URL: {current_url_after_nav[:80]}... ({i + 1}/10秒)")
                     time.sleep(1)
                 else:
                     # 10秒后仍未到达目标页面
                     final_url = page.url
-                    print(f"   ❌ 页面跳转超时")
+                    print("   ❌ 页面跳转超时")
                     print(f"   📍 目标URL: {target_url}")
                     print(f"   📍 实际URL: {final_url}")
                     if "integratedMonitorController" not in final_url:
-                        print(f"   ❌ 未到达目标页面，跳转失败")
+                        print("   ❌ 未到达目标页面，跳转失败")
                         return None
 
             except Exception as e:
                 print(f"   ❌ 打开出错: {e}")
-                print("="*60)
+                print("=" * 60)
                 return None
         else:
             print("   ✅ 已在故障监控页面")
@@ -180,11 +180,11 @@ class FaultFetcher(BaseFetcher):
         data = self.extract_fault_data(page)
         if data:
             print(f"✅ 成功提取 {len(data)} 条故障记录")
-            print("="*60)
+            print("=" * 60)
             return data
         else:
             print("❌ 未能提取到故障数据")
-            print("="*60)
+            print("=" * 60)
             return None
 
     def initialize_page(self, page, aircraft_list, target_date):
@@ -199,9 +199,9 @@ class FaultFetcher(BaseFetcher):
         Returns:
             bool: 是否成功
         """
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🔧 初始化页面设置")
-        print("="*60)
+        print("=" * 60)
 
         # 等待页面完全加载
         print("   ⏳ 等待页面元素加载...")
@@ -230,7 +230,7 @@ class FaultFetcher(BaseFetcher):
         print(f"   ✅ 日期已设置为: {target_date}")
 
         print("\n✅ 页面初始化完成")
-        print("="*60)
+        print("=" * 60)
         return True
 
     def select_aircrafts(self, page, aircraft_list):
@@ -244,14 +244,14 @@ class FaultFetcher(BaseFetcher):
         Returns:
             bool: 是否成功
         """
-        print(f"   📋 开始选择飞机...")
+        print("   📋 开始选择飞机...")
 
         # 查找机号下拉框
         # 结构：<div class="filter-option"><div class="filter-option-inner"><div class="filter-option-inner-inner"></div></div></div>
         print("   🔍 查找机号下拉框...")
 
         # 尝试找到第一个 filter-option
-        all_dropdowns = page.eles('tag:div@@class=filter-option')
+        all_dropdowns = page.eles("tag:div@@class=filter-option")
         if not all_dropdowns or len(all_dropdowns) == 0:
             print("   ❌ 未找到机号下拉框")
             return False
@@ -273,12 +273,12 @@ class FaultFetcher(BaseFetcher):
 
         # 清空所有已选项
         print("   🔍 清空所有已选项...")
-        text_elements = page.eles('tag:span@@class=text')
+        text_elements = page.eles("tag:span@@class=text")
         for ele in text_elements:
             parent = ele.parent()
             if parent:
-                parent_attr = parent.attr('class') or ''
-                if 'selected' in parent_attr or 'active' in parent_attr:
+                parent_attr = parent.attr("class") or ""
+                if "selected" in parent_attr or "active" in parent_attr:
                     text = ele.text.strip()
                     print(f"   🔄 取消选择: {text}")
                     parent.click(by_js=True)
@@ -292,7 +292,7 @@ class FaultFetcher(BaseFetcher):
 
         for aircraft in aircraft_list:
             # 重新获取元素列表
-            text_elements = page.eles('tag:span@@class=text')
+            text_elements = page.eles("tag:span@@class=text")
             found = False
             for ele in text_elements:
                 text = ele.text.strip()
@@ -317,7 +317,7 @@ class FaultFetcher(BaseFetcher):
 
         # 点击其他地方关闭下拉框
         try:
-            page.ele('tag:body').click()
+            page.ele("tag:body").click()
         except:
             pass
 
@@ -344,7 +344,7 @@ class FaultFetcher(BaseFetcher):
 
         # 查找历史按钮
         # 结构：<input id="legType3" name="legType" type="radio" value="3" onclick="updateLegType()">
-        history_radio = page.ele('tag:input@@id=legType3@@type=radio')
+        history_radio = page.ele("tag:input@@id=legType3@@type=radio")
 
         if not history_radio:
             print("   ❌ 未找到'历史'按钮")
@@ -353,7 +353,7 @@ class FaultFetcher(BaseFetcher):
         print("   ✅ 找到'历史'按钮")
 
         # 检查是否已选中
-        is_checked = history_radio.attr('checked')
+        is_checked = history_radio.attr("checked")
         if is_checked:
             print("   ✅ '历史'按钮已选中")
             return True
@@ -383,26 +383,26 @@ class FaultFetcher(BaseFetcher):
 
         # 解析日期
         try:
-            date_obj = datetime.strptime(target_date, '%Y-%m-%d')
+            date_obj = datetime.strptime(target_date, "%Y-%m-%d")
         except ValueError:
             print(f"   ❌ 日期格式错误: {target_date}")
             return False
 
         # 查找开始日期输入框
         # 结构：<input disabled="disabled" type="text" id="from" name="from" class="condition_input" ...>
-        from_input = page.ele('tag:input@@id=from')
+        from_input = page.ele("tag:input@@id=from")
         if not from_input:
             print("   ⚠️ 未找到开始日期输入框，尝试继续...")
 
         # 查找结束日期输入框
-        to_input = page.ele('tag:input@@id=to')
+        to_input = page.ele("tag:input@@id=to")
         if not to_input:
             print("   ⚠️ 未找到结束日期输入框，尝试继续...")
 
         # 尝试使用 JavaScript 设置日期
         try:
             # 使用 JavaScript 设置日期值
-            js_code = f'''
+            js_code = f"""
             // 设置开始日期
             var fromInput = document.getElementById('from');
             if (fromInput) {{
@@ -416,7 +416,7 @@ class FaultFetcher(BaseFetcher):
                 toInput.value = '{target_date}';
                 toInput.setAttribute('value', '{target_date}');
             }}
-            '''
+            """
             page.run_js(js_code)
             print(f"   ✅ 日期已设置为: {target_date}")
             time.sleep(1)
@@ -435,13 +435,13 @@ class FaultFetcher(BaseFetcher):
         Returns:
             bool: 是否成功
         """
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("⚡ 快速刷新模式")
-        print("="*60)
+        print("=" * 60)
 
         # 点击查询按钮
         print("   🔍 查找查询按钮...")
-        query_btn = page.ele('tag:input@@value=查询 @@class=button_partial2')
+        query_btn = page.ele("tag:input@@value=查询 @@class=button_partial2")
         if query_btn:
             print("   ✅ 找到查询按钮")
             query_btn.click(by_js=True)
@@ -455,31 +455,33 @@ class FaultFetcher(BaseFetcher):
         time.sleep(3)
 
         # 获取目标机号列表（用于验证数据是否刷新完成）
-        target_aircrafts = getattr(self, '_target_aircrafts', [])
+        target_aircrafts = getattr(self, "_target_aircrafts", [])
         # 只在首次运行时验证机号（防止刷新不完整）
         need_aircraft_validation = not self._initialized
 
         # 等待数据容器更新
         print("   🔍 检查数据更新...")
         for i in range(10):
-            data_con = page.ele('tag:div@@id=dataCon')
+            data_con = page.ele("tag:div@@id=dataCon")
             if data_con:
-                rows = data_con.eles('tag:div@@name=t_rtm_faultMainRowDiv')
+                rows = data_con.eles("tag:div@@name=t_rtm_faultMainRowDiv")
                 if rows:
                     # 首次运行时：验证数据是否只包含目标机号
                     if need_aircraft_validation and target_aircrafts:
                         # 检查前3行的机号，确保都是目标机号
-                        sample_rows = rows[:min(3, len(rows))]
+                        sample_rows = rows[: min(3, len(rows))]
                         has_non_target = False
 
                         for row in sample_rows:
                             try:
                                 # 提取机号（从第一列获取）
-                                first_cell = row.ele('tag:div@@class=t_c')
+                                first_cell = row.ele("tag:div@@class=t_c")
                                 if first_cell:
                                     aircraft_text = first_cell.text.strip()
                                     # 检查是否包含任何目标机号
-                                    is_target = any(target in aircraft_text for target in target_aircrafts)
+                                    is_target = any(
+                                        target in aircraft_text for target in target_aircrafts
+                                    )
                                     if not is_target:
                                         has_non_target = True
                                         print(f"   ⚠️ 发现非目标机号数据: {aircraft_text}")
@@ -489,19 +491,19 @@ class FaultFetcher(BaseFetcher):
                                 pass
 
                         if has_non_target:
-                            print(f"   🔄 数据未刷新完成（包含旧数据），继续等待2秒...")
+                            print("   🔄 数据未刷新完成（包含旧数据），继续等待2秒...")
                             time.sleep(2)
                             continue
 
-                    print(f"   ✅ 数据已刷新 (耗时: {i+3}秒)")
+                    print(f"   ✅ 数据已刷新 (耗时: {i + 3}秒)")
                     print(f"   📊 当前数据行数: {len(rows)}")
-                    print("="*60)
+                    print("=" * 60)
                     return True
-            print(f"   ⏳ 等待中... ({i+3}/10秒)")
+            print(f"   ⏳ 等待中... ({i + 3}/10秒)")
             time.sleep(1)
 
         print("   ⚠️ 数据刷新较慢，继续提取")
-        print("="*60)
+        print("=" * 60)
         return True
 
     def extract_fault_data(self, page):

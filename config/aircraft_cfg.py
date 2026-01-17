@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
 """
 飞机号映射配置模块
 提供飞机号映射逻辑和配置管理
 """
+
 import configparser
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 class AircraftConfig:
@@ -21,7 +21,7 @@ class AircraftConfig:
         if config_file is None:
             # 默认配置文件路径
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            config_file = os.path.join(project_root, 'config', 'config.ini')
+            config_file = os.path.join(project_root, "config", "config.ini")
 
         self.config_file = config_file
         self.config = configparser.ConfigParser()
@@ -32,7 +32,7 @@ class AircraftConfig:
         if not os.path.exists(self.config_file):
             raise FileNotFoundError(f"❌ 配置文件不存在: {self.config_file}")
 
-        self.config.read(self.config_file, encoding='utf-8')
+        self.config.read(self.config_file, encoding="utf-8")
 
     def get_aircraft_list(self) -> List[str]:
         """
@@ -41,9 +41,11 @@ class AircraftConfig:
         Returns:
             List[str]: 飞机号列表，例如 ['B-652G', 'B-656E']
         """
-        if self.config.has_section('aircraft') and self.config.has_option('aircraft', 'aircraft_list'):
-            aircraft_list_str = self.config.get('aircraft', 'aircraft_list')
-            aircraft_list = [x.strip() for x in aircraft_list_str.split(',')]
+        if self.config.has_section("aircraft") and self.config.has_option(
+            "aircraft", "aircraft_list"
+        ):
+            aircraft_list_str = self.config.get("aircraft", "aircraft_list")
+            aircraft_list = [x.strip() for x in aircraft_list_str.split(",")]
             return aircraft_list
         else:
             # 默认值
@@ -64,21 +66,18 @@ class AircraftConfig:
         # 默认映射规则
         # 如果飞机号本身不包含"C909-"，则添加前缀
         for aircraft in aircraft_list:
-            if 'C909-' in aircraft:
+            if "C909-" in aircraft:
                 # 已经是完整格式
                 mapping[aircraft] = aircraft
                 # 同时提取短飞机号作为键
-                short_name = aircraft.split('/')[-1] if '/' in aircraft else aircraft
+                short_name = aircraft.split("/")[-1] if "/" in aircraft else aircraft
                 mapping[short_name] = aircraft
             else:
                 # 需要添加前缀（从飞机号提取编号）
                 # B-652G -> C909-185/B-652G
                 # B-656E -> C909-196/B-656E
                 # 这里使用预定义的映射
-                predefined_mappings = {
-                    "B-652G": "C909-185/B-652G",
-                    "B-656E": "C909-196/B-656E"
-                }
+                predefined_mappings = {"B-652G": "C909-185/B-652G", "B-656E": "C909-196/B-656E"}
 
                 if aircraft in predefined_mappings:
                     mapping[aircraft] = predefined_mappings[aircraft]
@@ -142,7 +141,7 @@ def get_aircraft_mapping() -> Dict[str, str]:
 if __name__ == "__main__":
     # 测试代码
     print("🧪 飞机号配置测试")
-    print("="*60)
+    print("=" * 60)
 
     cfg = get_aircraft_config()
 

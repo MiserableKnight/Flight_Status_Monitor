@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 航段告警监控脚本
 
@@ -8,20 +7,22 @@
 - 当起飞(OFF)后超过计划航程时间+30分钟仍未落地(ON)时发送告警
 - 当落地(ON)后30分钟仍未滑入(IN)时发送告警
 """
-import pandas as pd
-from datetime import datetime
+
+import json
 import os
 import sys
-import json
+from datetime import datetime
+
+import pandas as pd
 
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from core.logger import get_logger
-from notifiers.leg_alert_notifier import LegAlertNotifier
 from config.config_loader import load_config
 from config.flight_schedule import FlightSchedule
+from core.logger import get_logger
+from notifiers.leg_alert_notifier import LegAlertNotifier
 
 
 class LegAlertMonitor:
@@ -32,8 +33,8 @@ class LegAlertMonitor:
 
     # 告警阈值（分钟）
     ALERT_THRESHOLD_OUT_OFF = 30  # 滑出后30分钟仍未起飞
-    ALERT_THRESHOLD_OFF_ON = 30   # 起飞后超过计划航程时间+30分钟仍未落地
-    ALERT_THRESHOLD_ON_IN = 30    # 落地后30分钟仍未滑入
+    ALERT_THRESHOLD_OFF_ON = 30  # 起飞后超过计划航程时间+30分钟仍未落地
+    ALERT_THRESHOLD_ON_IN = 30  # 落地后30分钟仍未滑入
 
     def __init__(self, target_date=None):
         """
@@ -42,17 +43,17 @@ class LegAlertMonitor:
         Args:
             target_date: 目标日期（YYYY-MM-DD格式），默认为今天
         """
-        self.target_date = target_date or datetime.now().strftime('%Y-%m-%d')
+        self.target_date = target_date or datetime.now().strftime("%Y-%m-%d")
         self.log = get_logger()
         self.config_loader = load_config()
         self.gmail_config = self.config_loader.get_gmail_config()
 
         # 状态文件路径
-        self.alert_status_file = os.path.join(project_root, 'data', 'last_leg_alert_status.json')
+        self.alert_status_file = os.path.join(project_root, "data", "last_leg_alert_status.json")
 
     def get_data_file_path(self):
         """获取数据文件路径"""
-        return os.path.join(project_root, 'data', 'daily_raw', f'leg_data_{self.target_date}.csv')
+        return os.path.join(project_root, "data", "daily_raw", f"leg_data_{self.target_date}.csv")
 
     def load_alert_status(self):
         """
@@ -65,7 +66,7 @@ class LegAlertMonitor:
             return {}
 
         try:
-            with open(self.alert_status_file, 'r', encoding='utf-8') as f:
+            with open(self.alert_status_file, encoding="utf-8") as f:
                 status_data = json.load(f)
                 return status_data
         except Exception as e:
@@ -82,7 +83,7 @@ class LegAlertMonitor:
         try:
             os.makedirs(os.path.dirname(self.alert_status_file), exist_ok=True)
 
-            with open(self.alert_status_file, 'w', encoding='utf-8') as f:
+            with open(self.alert_status_file, "w", encoding="utf-8") as f:
                 json.dump(status_data, f, ensure_ascii=False, indent=2)
 
             self.log(f"告警状态已保存: {self.alert_status_file}")
@@ -100,11 +101,11 @@ class LegAlertMonitor:
         Returns:
             int: 从0点开始的分钟数，解析失败返回 None
         """
-        if pd.isna(time_str) or time_str == '':
+        if pd.isna(time_str) or time_str == "":
             return None
 
         try:
-            hour, minute = map(int, str(time_str).split(':'))
+            hour, minute = map(int, str(time_str).split(":"))
             return hour * 60 + minute
         except Exception:
             return None
@@ -120,6 +121,7 @@ class LegAlertMonitor:
             int: 从0点开始的分钟数
         """
         from datetime import timedelta
+
         # 获取UTC时间并转换为北京时间（UTC+8）
         now_utc = datetime.utcnow()
         beijing_time = now_utc + timedelta(hours=8)
@@ -136,13 +138,13 @@ class LegAlertMonitor:
         Returns:
             str: 告警消息，如果无需告警返回 None
         """
-        out_time = row.get('OUT')
-        off_time = row.get('OFF')
+        out_time = row.get("OUT")
+        off_time = row.get("OFF")
 
         # 检查是否有OUT但没有OFF
-        if pd.isna(out_time) or out_time == '':
+        if pd.isna(out_time) or out_time == "":
             return None
-        if not pd.isna(off_time) and off_time != '':
+        if not pd.isna(off_time) and off_time != "":
             return None
 
         # 计算OUT时间到现在的分钟数
@@ -159,8 +161,8 @@ class LegAlertMonitor:
 
         # 检查是否超过阈值
         if time_diff >= self.ALERT_THRESHOLD_OUT_OFF:
-            aircraft = row.get('执飞飞机', '未知飞机')
-            flight = row.get('航班号', '未知航班')
+            aircraft = row.get("执飞飞机", "未知飞机")
+            flight = row.get("航班号", "未知航班")
             return f"{aircraft} ({flight}) 滑出30分钟仍未起飞。请确认飞机状态。"
 
         return None
@@ -176,13 +178,13 @@ class LegAlertMonitor:
         Returns:
             str: 告警消息，如果无需告警返回 None
         """
-        on_time = row.get('ON')
-        in_time = row.get('IN')
+        on_time = row.get("ON")
+        in_time = row.get("IN")
 
         # 检查是否有ON但没有IN
-        if pd.isna(on_time) or on_time == '':
+        if pd.isna(on_time) or on_time == "":
             return None
-        if not pd.isna(in_time) and in_time != '':
+        if not pd.isna(in_time) and in_time != "":
             return None
 
         # 计算ON时间到现在的分钟数
@@ -199,8 +201,8 @@ class LegAlertMonitor:
 
         # 检查是否超过阈值
         if time_diff >= self.ALERT_THRESHOLD_ON_IN:
-            aircraft = row.get('执飞飞机', '未知飞机')
-            flight = row.get('航班号', '未知航班')
+            aircraft = row.get("执飞飞机", "未知飞机")
+            flight = row.get("航班号", "未知航班")
             return f"{aircraft} ({flight}) 落地30分钟仍未停靠。请确认飞机状态。"
 
         return None
@@ -218,14 +220,14 @@ class LegAlertMonitor:
         Returns:
             str: 告警消息，如果无需告警返回 None
         """
-        off_time = row.get('OFF')
-        on_time = row.get('ON')
-        flight_number = row.get('航班号', '')
+        off_time = row.get("OFF")
+        on_time = row.get("ON")
+        flight_number = row.get("航班号", "")
 
         # 检查是否有OFF但没有ON
-        if pd.isna(off_time) or off_time == '':
+        if pd.isna(off_time) or off_time == "":
             return None
-        if not pd.isna(on_time) and on_time != '':
+        if not pd.isna(on_time) and on_time != "":
             return None
 
         # 获取航班信息（计划航程时间）
@@ -234,7 +236,7 @@ class LegAlertMonitor:
             # 未知航班，跳过此检查
             return None
 
-        duration_minutes = flight_info.get('duration_minutes', 0)
+        duration_minutes = flight_info.get("duration_minutes", 0)
 
         # 计算OFF时间到现在的分钟数
         off_minutes = self.parse_time_to_minutes(off_time)
@@ -251,7 +253,7 @@ class LegAlertMonitor:
         # 检查是否超过（计划航程时间 + 30分钟）
         threshold = duration_minutes + self.ALERT_THRESHOLD_OFF_ON
         if time_diff >= threshold:
-            aircraft = row.get('执飞飞机', '未知飞机')
+            aircraft = row.get("执飞飞机", "未知飞机")
             return f"{aircraft} ({flight_number}) 起飞{time_diff}分钟（计划航程{duration_minutes}分钟）仍未落地。请确认飞机状态。"
 
         return None
@@ -302,7 +304,7 @@ class LegAlertMonitor:
             return alerts
 
         # 获取上次发送的告警集合
-        last_alerts_set = set(last_status.get('alerts', []))
+        last_alerts_set = set(last_status.get("alerts", []))
 
         # 过滤出新的告警
         new_alerts = [alert for alert in alerts if alert not in last_alerts_set]
@@ -327,7 +329,7 @@ class LegAlertMonitor:
         if notifier.is_enabled():
             return notifier.send_alert_notification(alerts, self.target_date)
         else:
-            print(f"   ⚠️ 邮件通知未启用")
+            print("   ⚠️ 邮件通知未启用")
             print("\n📧 告警内容：")
             for msg in alerts:
                 print(f"   - {msg}")
@@ -349,7 +351,7 @@ class LegAlertMonitor:
             self.log(f"数据文件不存在: {data_file}", "ERROR")
             return False
 
-        print(f"📂 读取数据文件...")
+        print("📂 读取数据文件...")
         try:
             df = pd.read_csv(data_file)
             print(f"   ✅ 读取到 {len(df)} 行数据")
@@ -379,11 +381,13 @@ class LegAlertMonitor:
         if not new_alerts:
             print("   ℹ️ 无新告警（均已发送过）")
             # 更新状态为当前时间
-            self.save_alert_status({
-                'alerts': alerts,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'date': self.target_date
-            })
+            self.save_alert_status(
+                {
+                    "alerts": alerts,
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "date": self.target_date,
+                }
+            )
             return True
 
         print(f"   ✅ 有 {len(new_alerts)} 个新告警需要发送")
@@ -393,17 +397,19 @@ class LegAlertMonitor:
         success = self.send_alert_notification(new_alerts)
 
         if success:
-            print(f"   ✅ 告警通知发送成功")
+            print("   ✅ 告警通知发送成功")
 
             # 保存当前告警状态
-            self.save_alert_status({
-                'alerts': alerts,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'date': self.target_date
-            })
+            self.save_alert_status(
+                {
+                    "alerts": alerts,
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "date": self.target_date,
+                }
+            )
             return True
         else:
-            print(f"   ⚠️ 告警通知发送失败")
+            print("   ⚠️ 告警通知发送失败")
             return False
 
     def run(self):
@@ -419,6 +425,7 @@ class LegAlertMonitor:
             print(f"❌ 告警监控执行失败：{e}")
             self.log(f"告警监控执行失败: {e}", "ERROR")
             import traceback
+
             traceback.print_exc()
             return False
 

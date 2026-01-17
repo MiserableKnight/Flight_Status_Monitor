@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 数据抓取基类
 
@@ -10,22 +9,23 @@
 - CSV保存
 - 工具函数
 """
-from DrissionPage import ChromiumPage, ChromiumOptions
-import time
+
 import csv
-import configparser
 import os
 import shutil
-from datetime import datetime
-from abc import ABC, abstractmethod
 import sys
+import time
+from abc import ABC, abstractmethod
+from datetime import datetime
+
+from DrissionPage import ChromiumOptions, ChromiumPage
 
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from core.logger import get_logger
 from config.config_loader import ConfigLoader
+from core.logger import get_logger
 
 
 class BaseFetcher(ABC):
@@ -58,7 +58,7 @@ class BaseFetcher(ABC):
 
         :param config_file: 配置文件路径,默认为 config/config.ini
         """
-        self.config_file = config_file or os.path.join(project_root, 'config/config.ini')
+        self.config_file = config_file or os.path.join(project_root, "config/config.ini")
         self.cfg = None
         self.user_data_path = None
         self.aircraft_list = []
@@ -79,12 +79,12 @@ class BaseFetcher(ABC):
 
         try:
             self.cfg = {
-                'username': config_loader.get_credentials()['username'],
-                'password': config_loader.get_credentials()['password'],
-                'user_data_path': config_loader.get_paths()['user_data_path'],
-                'target_url': config_loader.get_target_url()
+                "username": config_loader.get_credentials()["username"],
+                "password": config_loader.get_credentials()["password"],
+                "user_data_path": config_loader.get_paths()["user_data_path"],
+                "target_url": config_loader.get_target_url(),
             }
-            self.user_data_path = self.cfg['user_data_path']
+            self.user_data_path = self.cfg["user_data_path"]
         except Exception as e:
             raise ValueError(f"配置文件缺失: {e}")
 
@@ -146,7 +146,7 @@ class BaseFetcher(ABC):
                 time.sleep(1)
                 return True
             time.sleep(1)
-            print(f"   ⏳ 等待 {desc}... ({i+1}/{timeout})")
+            print(f"   ⏳ 等待 {desc}... ({i + 1}/{timeout})")
         print(f"   ❌ 超时: 未找到 {desc}")
         return False
 
@@ -172,13 +172,13 @@ class BaseFetcher(ABC):
             co.set_local_port(port)
 
             try:
-                print(f"\n{'='*60}")
-                print(f"🌐 初始化浏览器连接...")
+                print(f"\n{'=' * 60}")
+                print("🌐 初始化浏览器连接...")
                 print(f"📍 端口: {port}")
                 print(f"📍 用户数据: {user_data_path}")
-                print(f"{'='*60}")
+                print(f"{'=' * 60}")
                 BaseFetcher._browsers[port] = ChromiumPage(co)
-                print(f"✅ 浏览器连接成功!")
+                print("✅ 浏览器连接成功!")
                 self.log(f"Browser connected successfully (port: {port})", "INFO")
             except Exception as e:
                 print(f"❌ 浏览器连接失败: {e}")
@@ -222,13 +222,17 @@ class BaseFetcher(ABC):
             current_url = page.url
 
         # 判断页面状态
-        is_blank_page = "chrome://" in current_url or current_url == "about:blank" or "newtab" in current_url
-        is_login_page = ("portal" in current_url and "login" in current_url) or "rbacUsersController/login.html" in current_url
-        is_in_system = ("cis.comac.cc:8004" in current_url or "cis.comac.cc:8010" in current_url)
+        is_blank_page = (
+            "chrome://" in current_url or current_url == "about:blank" or "newtab" in current_url
+        )
+        is_login_page = (
+            "portal" in current_url and "login" in current_url
+        ) or "rbacUsersController/login.html" in current_url
+        is_in_system = "cis.comac.cc:8004" in current_url or "cis.comac.cc:8010" in current_url
 
         # 如果已在系统内但不在首页，也认为就绪（由子类决定是否需要导航）
         if is_in_system:
-            print(f"✅ 已在系统内")
+            print("✅ 已在系统内")
             self.log("Already in system", "INFO")
             return True
 
@@ -251,74 +255,75 @@ class BaseFetcher(ABC):
 
             # 每5秒打印一次URL
             if i % 10 == 0:
-                print(f"   📍 [{i//2}s] 当前URL: {current_url}")
+                print(f"   📍 [{i // 2}s] 当前URL: {current_url}")
 
             # 情况1: 已在目标首页
             if "mainController/index.html" in current_url:
-                print(f"   ✅ 已在首页!")
+                print("   ✅ 已在首页!")
                 found_target = True
                 break
 
             # 情况2: 在portal登录页 - 需要填充账号密码
             # 修改检测条件：portal 在URL中 或者 cis.comac.cc 在URL中且能找到密码框
             is_portal_page = "portal" in current_url
-            is_cis_login = "cis.comac.cc" in current_url and page.ele('#loginPwd')
+            is_cis_login = "cis.comac.cc" in current_url and page.ele("#loginPwd")
 
             if (is_portal_page or is_cis_login) and not login_executed:
-                pwd_ele = page.ele('#loginPwd')
+                pwd_ele = page.ele("#loginPwd")
                 if pwd_ele:
-                    print(f"   🔒 检测到登录页,开始登录...")
+                    print("   🔒 检测到登录页,开始登录...")
                     try:
                         # 填账号
-                        user_ele = page.ele('tag:input@@placeholder=请输入账号')
+                        user_ele = page.ele("tag:input@@placeholder=请输入账号")
                         if not user_ele:
-                            user_ele = page.ele('tag:input@@type=text')
+                            user_ele = page.ele("tag:input@@type=text")
                         if not user_ele:
                             # 尝试通过name属性查找
-                            user_ele = page.ele('tag:input@@name=username')
+                            user_ele = page.ele("tag:input@@name=username")
 
                         if user_ele:
-                            print(f"   ✅ 找到账号输入框")
+                            print("   ✅ 找到账号输入框")
                             user_ele.clear()
-                            user_ele.input(self.cfg['username'])
-                            print(f"   📝 账号已填写")  # 不再打印具体账号信息
+                            user_ele.input(self.cfg["username"])
+                            print("   📝 账号已填写")  # 不再打印具体账号信息
                             try:
-                                page.ele('text:FLYWIN').click(by_js=True)
+                                page.ele("text:FLYWIN").click(by_js=True)
                             except:
                                 pass
 
                         # 填密码并提交
-                        pwd_ele = page.ele('#loginPwd')
+                        pwd_ele = page.ele("#loginPwd")
                         if pwd_ele:
-                            print(f"   ✅ 找到密码输入框")
+                            print("   ✅ 找到密码输入框")
                             pwd_ele.clear()
-                            pwd_ele.input(self.cfg['password'])
-                            print(f"   📝 密码已填写")
-                            print(f"   ⚡ 提交登录...")
-                            pwd_ele.input('\n')
+                            pwd_ele.input(self.cfg["password"])
+                            print("   📝 密码已填写")
+                            print("   ⚡ 提交登录...")
+                            pwd_ele.input("\n")
                             login_executed = True
 
                     except Exception as e:
                         print(f"   ❌ 登录出错: {e}")
                         import traceback
+
                         traceback.print_exc()
 
             # 情况3: 在rbacUsersController中间页 - 需要点击WEB
             elif "rbacUsersController/login.html" in current_url:
-                web_btn = page.ele('text:WEB')
+                web_btn = page.ele("text:WEB")
                 if web_btn and web_btn.states.is_displayed:
-                    print(f"   👀 检测到中间页,点击 'WEB' 按钮...")
+                    print("   👀 检测到中间页,点击 'WEB' 按钮...")
                     web_btn.click(by_js=True)
 
             # 情况4: 已在系统内其他页面（支持8004和8010端口）
-            elif ("cis.comac.cc:8004" in current_url or "cis.comac.cc:8010" in current_url):
-                print(f"   ✅ 已在系统内")
+            elif "cis.comac.cc:8004" in current_url or "cis.comac.cc:8010" in current_url:
+                print("   ✅ 已在系统内")
                 found_target = True
                 break
 
             # 每5秒打印一次进度(减少输出)
             if i % 10 == 0 and i > 0:
-                print(f"   ⏳ 等待中... {i//2}秒", end="\r")
+                print(f"   ⏳ 等待中... {i // 2}秒", end="\r")
 
             # 快速检测,0.5秒间隔
             time.sleep(0.5)
@@ -332,7 +337,7 @@ class BaseFetcher(ABC):
 
             # 如果提供了目标URL，直接跳转（避免二次跳转被拦截）
             if target_url:
-                print(f"🎯 登录成功，直接跳转到目标页面...")
+                print("🎯 登录成功，直接跳转到目标页面...")
                 print(f"   📍 目标URL: {target_url}")
                 try:
                     # 记录跳转前的URL
@@ -347,24 +352,28 @@ class BaseFetcher(ABC):
                     for i in range(15):  # 增加到15秒
                         current_url = page.url
                         # 检查是否已到达目标页面（通过URL关键词）
-                        if "integratedMonitorController" in current_url or "lineLogController" in current_url:
-                            print(f"   ✅ 已到达目标页面 (耗时: {i+1}秒)")
+                        if (
+                            "integratedMonitorController" in current_url
+                            or "lineLogController" in current_url
+                        ):
+                            print(f"   ✅ 已到达目标页面 (耗时: {i + 1}秒)")
                             print(f"   📍 最终URL: {current_url}")
                             success = True
                             break
-                        print(f"   ⏳ 加载中... URL: {current_url[:80]}... ({i+1}/15秒)")
+                        print(f"   ⏳ 加载中... URL: {current_url[:80]}... ({i + 1}/15秒)")
                         time.sleep(1)
 
                     if not success:
-                        print(f"   ⚠️ 页面加载超时，可能被重定向")
+                        print("   ⚠️ 页面加载超时，可能被重定向")
                         print(f"   📍 最终URL: {page.url}")
-                        print(f"   💡 将在后续流程中尝试重新跳转")
+                        print("   💡 将在后续流程中尝试重新跳转")
 
                 except Exception as e:
                     print(f"   ❌ 跳转失败: {e}")
                     import traceback
+
                     traceback.print_exc()
-                    print(f"   💡 将在后续流程中重试")
+                    print("   💡 将在后续流程中重试")
 
             return True
         else:
@@ -372,7 +381,7 @@ class BaseFetcher(ABC):
             self.log("页面状态异常", "ERROR")
             return False
 
-    def save_to_csv(self, data, filename=None, subdir='data/daily_raw'):
+    def save_to_csv(self, data, filename=None, subdir="data/daily_raw"):
         """
         保存数据到CSV文件(覆盖模式)
 
@@ -400,13 +409,13 @@ class BaseFetcher(ABC):
 
         # 备份策略：只备份 data/leg_data.csv 总表，最多保留2个备份
         needs_backup = (
-            subdir == 'data' and  # 只在 data 文件夹下
-            filename == 'leg_data.csv' and  # 只备份总表
-            os.path.exists(filepath)  # 文件已存在
+            subdir == "data"  # 只在 data 文件夹下
+            and filename == "leg_data.csv"  # 只备份总表
+            and os.path.exists(filepath)  # 文件已存在
         )
 
         if needs_backup:
-            backup_dir = os.path.join(project_root, 'data', 'backup')
+            backup_dir = os.path.join(project_root, "data", "backup")
             if not os.path.exists(backup_dir):
                 os.makedirs(backup_dir)
 
@@ -429,7 +438,7 @@ class BaseFetcher(ABC):
 
         try:
             # 使用 'w' 模式覆盖写入
-            with open(filepath, 'w', newline='', encoding='utf-8-sig') as f:
+            with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
                 writer = csv.writer(f)
                 writer.writerows(data)
             print(f"\n✅ 数据已保存到: {filepath}")
@@ -491,7 +500,7 @@ class BaseFetcher(ABC):
         if data:
             csv_file = self.save_to_csv(data, filename=f"{self.get_data_prefix()}_{target}.csv")
             if csv_file:
-                print(f"\n🎉 数据抓取完成!")
+                print("\n🎉 数据抓取完成!")
                 print(f"📄 文件路径: {csv_file}")
                 print(f"📊 总记录数: {len(data) - 1 if len(data) > 1 else 0}")
                 self.log(f"Data saved successfully: {csv_file}", "SUCCESS")

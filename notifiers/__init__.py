@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 业务通知器模块
 
@@ -11,9 +10,9 @@
 所有通知器继承自 core.base_notifier.BaseNotifier
 """
 
-from .task_notifier import TaskNotifier
-from .leg_status_notifier import LegStatusNotifier
 from .fault_status_notifier import FaultStatusNotifier
 from .leg_alert_notifier import LegAlertNotifier
+from .leg_status_notifier import LegStatusNotifier
+from .task_notifier import TaskNotifier
 
-__all__ = ['TaskNotifier', 'LegStatusNotifier', 'FaultStatusNotifier', 'LegAlertNotifier']
+__all__ = ["TaskNotifier", "LegStatusNotifier", "FaultStatusNotifier", "LegAlertNotifier"]

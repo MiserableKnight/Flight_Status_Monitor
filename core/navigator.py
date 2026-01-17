@@ -1,22 +1,25 @@
-# -*- coding: utf-8 -*-
 """
 智能导航模块
 提供URL状态检测、智能导航和自动恢复功能
 """
-from DrissionPage import ChromiumPage
+
 import time
 from enum import Enum
-from typing import Optional, Callable
+from typing import Callable
+
+from DrissionPage import ChromiumPage
+
 from .logger import get_logger
 
 
 class PageState(Enum):
     """页面状态枚举"""
-    NEED_LOGIN = "NEED_LOGIN"           # 需要登录
-    ALREADY_TARGET = "ALREADY_TARGET"   # 已在目标页
-    IN_SYSTEM = "IN_SYSTEM"             # 在系统内但非目标页
-    OUT_SYSTEM = "OUT_SYSTEM"           # 在系统外
-    UNKNOWN = "UNKNOWN"                 # 未知状态
+
+    NEED_LOGIN = "NEED_LOGIN"  # 需要登录
+    ALREADY_TARGET = "ALREADY_TARGET"  # 已在目标页
+    IN_SYSTEM = "IN_SYSTEM"  # 在系统内但非目标页
+    OUT_SYSTEM = "OUT_SYSTEM"  # 在系统外
+    UNKNOWN = "UNKNOWN"  # 未知状态
 
 
 class Navigator:
@@ -30,8 +33,8 @@ class Navigator:
             config: 配置字典，包含URL等信息
         """
         self.config = config or {}
-        self.urls = self.config.get('urls', {})
-        self.target_url = self.config.get('target_url', '')
+        self.urls = self.config.get("urls", {})
+        self.target_url = self.config.get("target_url", "")
         self.log = get_logger()
 
     def detect_page_state(self, page: ChromiumPage, target_url_keyword: str = None) -> PageState:
@@ -53,8 +56,8 @@ class Navigator:
             return PageState.UNKNOWN
 
         # 1. 检查是否在登录页或鉴权页
-        login_keywords = self.urls.get('login_keywords', 'login,rbacUsersController,auth')
-        login_indicators = [k.strip() for k in login_keywords.split(',')]
+        login_keywords = self.urls.get("login_keywords", "login,rbacUsersController,auth")
+        login_indicators = [k.strip() for k in login_keywords.split(",")]
 
         if any(indicator in current_url.lower() for indicator in login_indicators):
             print("⚠️ 检测到处于登录或鉴权页，需要重新登录")
@@ -66,7 +69,7 @@ class Navigator:
             return PageState.ALREADY_TARGET
 
         # 3. 检查是否在系统首页
-        home_keyword = self.urls.get('home', 'mainController/index.html')
+        home_keyword = self.urls.get("home", "mainController/index.html")
         if home_keyword in current_url:
             if target_url_keyword:
                 print(f"📍 已在系统首页，准备跳转至目标模块 ({target_url_keyword})...")
@@ -80,7 +83,7 @@ class Navigator:
             return PageState.IN_SYSTEM
 
         # 5. 其他情况 - 在系统外
-        print(f"🌐 在系统外，准备进入系统...")
+        print("🌐 在系统外，准备进入系统...")
         return PageState.OUT_SYSTEM
 
     def navigate_to_target(self, page: ChromiumPage, state: PageState) -> bool:
@@ -125,8 +128,9 @@ class Navigator:
             time.sleep(2)
             return True
 
-    def smart_navigate(self, page: ChromiumPage, target_module_keyword: str = None,
-                      perform_login: Callable = None) -> bool:
+    def smart_navigate(
+        self, page: ChromiumPage, target_module_keyword: str = None, perform_login: Callable = None
+    ) -> bool:
         """
         智能导航到目标模块（一站式函数）
 
@@ -138,9 +142,9 @@ class Navigator:
         Returns:
             bool: 导航是否成功
         """
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🧭 智能导航系统启动")
-        print("="*60)
+        print("=" * 60)
 
         # 步骤1: 检测当前状态
         state = self.detect_page_state(page, target_module_keyword)
@@ -170,7 +174,7 @@ class Navigator:
         else:
             print("❌ 导航失败")
 
-        print("="*60 + "\n")
+        print("=" * 60 + "\n")
         return success
 
     def get_current_module(self, page: ChromiumPage) -> str:
@@ -192,7 +196,7 @@ class Navigator:
                 return "综合监控"
             elif "lineLogNewController" in current_url:
                 return "运力统计"
-            elif any(kw in current_url.lower() for kw in ['login', 'rbacUsersController']):
+            elif any(kw in current_url.lower() for kw in ["login", "rbacUsersController"]):
                 return "登录页"
             elif "cis.comac.cc:8004" in current_url:
                 return "其他系统页"
@@ -244,7 +248,7 @@ def navigate_to_target(page, state, target_url=None):
     Returns:
         bool: 导航是否成功
     """
-    config = {'target_url': target_url} if target_url else {}
+    config = {"target_url": target_url} if target_url else {}
     nav = Navigator(config=config)
     return nav.navigate_to_target(page, state)
 
@@ -268,18 +272,20 @@ def smart_navigate(page, target_module_keyword=None, perform_login=None):
 if __name__ == "__main__":
     # 测试代码
     print("🧪 导航模块测试")
-    print("="*60)
+    print("=" * 60)
+
+    import os
+    import sys
 
     from .browser_handler import BrowserHandler
-    import sys
-    import os
+
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from config.config_loader import load_config
 
     config_loader = load_config()
     config = config_loader.get_all_config()
 
-    handler = BrowserHandler(user_data_path=config['paths']['user_data_path'])
+    handler = BrowserHandler(user_data_path=config["paths"]["user_data_path"])
 
     if handler.connect():
         page = handler.get_page()

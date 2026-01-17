@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 测试脚本 - 验证统一调度器的基本功能
 
@@ -9,22 +8,23 @@
 4. LegFetcher 数据抓取
 5. FaultFetcher 页面检查
 """
-import sys
+
 import os
+import sys
 
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-from fetchers.leg_fetcher import LegFetcher
 from fetchers.fault_fetcher import FaultFetcher
+from fetchers.leg_fetcher import LegFetcher
 
 
 def test_basic_functionality():
     """测试基本功能"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🧪 测试：基本功能验证")
-    print("="*60)
+    print("=" * 60)
 
     # ========== 步骤1: 创建 Fetcher ==========
     print("\n📍 步骤1: 创建 Fetcher 实例...")
@@ -99,17 +99,17 @@ def test_basic_functionality():
 
     print("✅ 已切换回 LegFetcher 标签页")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("✅ 所有测试通过！")
-    print("="*60)
+    print("=" * 60)
     return True
 
 
 def main():
     """主函数"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🧪 统一调度器测试脚本")
-    print("="*60)
+    print("=" * 60)
 
     try:
         success = test_basic_functionality()
@@ -131,6 +131,7 @@ def main():
     except Exception as e:
         print(f"\n❌ 测试出错: {e}")
         import traceback
+
         traceback.print_exc()
 
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 飞行阶段映射配置
 用于将故障数据中的飞行阶段缩写转换为中文描述
@@ -6,36 +5,29 @@
 
 # RTMU触发报文的飞行阶段映射
 RTMU_PHASE_MAPPING = {
-    'PO': '准备',
-    'ES': '启发',
-    'SL': '滑行',
-    'TO': '起飞',
-    'IC': '初始爬升',
-    'CL': '爬升',
-    'CR': '巡航',
-    'DC': '下降',
-    'AP': '进近',
-    'LN': '着陆',
-    'GA': '复飞',
-    'IN': '滑入',
-    'EO': '关车'
+    "PO": "准备",
+    "ES": "启发",
+    "SL": "滑行",
+    "TO": "起飞",
+    "IC": "初始爬升",
+    "CL": "爬升",
+    "CR": "巡航",
+    "DC": "下降",
+    "AP": "进近",
+    "LN": "着陆",
+    "GA": "复飞",
+    "IN": "滑入",
+    "EO": "关车",
 }
 
 # CMS系统触发报文的飞行阶段映射
-CMS_PHASE_MAPPING = {
-    'Taxi': '滑行',
-    'In_Air': '空中',
-    'Ground': '地面'
-}
+CMS_PHASE_MAPPING = {"Taxi": "滑行", "In_Air": "空中", "Ground": "地面"}
 
 # 合并所有映射
 PHASE_MAPPING = {**RTMU_PHASE_MAPPING, **CMS_PHASE_MAPPING}
 
 # 故障类型映射
-FAULT_TYPE_MAPPING = {
-    'MMSG': 'CMS',
-    'FDE': 'CAS'
-}
+FAULT_TYPE_MAPPING = {"MMSG": "CMS", "FDE": "CAS"}
 
 
 def get_fault_type_name(fault_type_code: str) -> str:
@@ -57,12 +49,12 @@ def get_fault_type_name(fault_type_code: str) -> str:
         'UNKNOWN'
     """
     if not fault_type_code:
-        return ''
+        return ""
 
     return FAULT_TYPE_MAPPING.get(fault_type_code, fault_type_code)
 
 
-def get_phase_name(phase_code: str, suffix: str = '阶段') -> str:
+def get_phase_name(phase_code: str, suffix: str = "阶段") -> str:
     """
     获取飞行阶段的中文名称
 
@@ -82,7 +74,7 @@ def get_phase_name(phase_code: str, suffix: str = '阶段') -> str:
         'UNKNOWN'
     """
     if not phase_code:
-        return ''
+        return ""
 
     # 查找映射
     chinese_name = PHASE_MAPPING.get(phase_code)
@@ -105,6 +97,6 @@ def get_phase_name_without_suffix(phase_code: str) -> str:
         str: 中文阶段名称（如 '进近'），如果找不到映射则返回原代码
     """
     if not phase_code:
-        return ''
+        return ""
 
     return PHASE_MAPPING.get(phase_code, phase_code)

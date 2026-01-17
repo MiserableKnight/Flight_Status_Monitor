@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 调度器模块
 
@@ -9,11 +8,11 @@
 """
 
 from .base_scheduler import BaseScheduler
-from .leg_scheduler import LegScheduler
 from .fault_scheduler import FaultScheduler
+from .leg_scheduler import LegScheduler
 
 __all__ = [
-    'BaseScheduler',
-    'LegScheduler',
-    'FaultScheduler',
+    "BaseScheduler",
+    "LegScheduler",
+    "FaultScheduler",
 ]

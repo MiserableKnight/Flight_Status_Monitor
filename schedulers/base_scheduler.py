@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 调度器基类
 
@@ -10,21 +9,21 @@
 - 主循环框架
 - 依赖注入支持
 """
-import sys
+
 import os
+import sys
 import time
-from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 from config.config_loader import load_config
-from config.flight_schedule import FlightSchedule
 from core.logger import get_logger
-from interfaces.interfaces import ILogger, IConfigLoader
+from interfaces.interfaces import IConfigLoader, ILogger
 
 
 class BaseScheduler(ABC):
@@ -47,9 +46,9 @@ class BaseScheduler(ABC):
         scheduler = MyScheduler()
     """
 
-    def __init__(self,
-                 config_loader: Optional[IConfigLoader] = None,
-                 logger: Optional[ILogger] = None):
+    def __init__(
+        self, config_loader: Optional[IConfigLoader] = None, logger: Optional[ILogger] = None
+    ):
         """
         初始化调度器（支持依赖注入）
 
@@ -80,9 +79,9 @@ class BaseScheduler(ABC):
 
         # 统计数据（子类可以扩展）
         self.stats = {
-            'fetch_count': 0,
-            'success_count': 0,
-            'failure_count': 0,
+            "fetch_count": 0,
+            "success_count": 0,
+            "failure_count": 0,
         }
 
         self.log(f"{self.scheduler_name} 初始化完成")
@@ -200,13 +199,13 @@ class BaseScheduler(ABC):
 
         for attempt in range(max_retries):
             try:
-                print("\n" + "="*60)
-                print(f"🔄 尝试重连浏览器... ({attempt+1}/{max_retries})")
-                print("="*60)
+                print("\n" + "=" * 60)
+                print(f"🔄 尝试重连浏览器... ({attempt + 1}/{max_retries})")
+                print("=" * 60)
 
                 # 重新连接
                 if not self.connect_browser():
-                    print(f"❌ 连接失败 ({attempt+1}/{max_retries})")
+                    print(f"❌ 连接失败 ({attempt + 1}/{max_retries})")
                     if attempt < max_retries - 1:
                         time.sleep(3)
                         continue
@@ -214,18 +213,18 @@ class BaseScheduler(ABC):
 
                 # 重新登录
                 if not self.login():
-                    print(f"❌ 登录失败 ({attempt+1}/{max_retries})")
+                    print(f"❌ 登录失败 ({attempt + 1}/{max_retries})")
                     if attempt < max_retries - 1:
                         time.sleep(3)
                         continue
                     return False
 
                 print("✅ 重连成功")
-                print("="*60)
+                print("=" * 60)
                 return True
 
             except Exception as e:
-                print(f"❌ 重连异常 ({attempt+1}/{max_retries}): {e}")
+                print(f"❌ 重连异常 ({attempt + 1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     time.sleep(3)
                 else:
@@ -275,7 +274,7 @@ class BaseScheduler(ABC):
             datetime: 今天的datetime对象
         """
         today = datetime.now().date()
-        hour, minute = map(int, time_str.split(':'))
+        hour, minute = map(int, time_str.split(":"))
         return datetime.combine(today, datetime.min.time()) + timedelta(hours=hour, minutes=minute)
 
     def update_stats(self, success: bool):
@@ -285,11 +284,11 @@ class BaseScheduler(ABC):
         Args:
             success: 是否成功
         """
-        self.stats['fetch_count'] += 1
+        self.stats["fetch_count"] += 1
         if success:
-            self.stats['success_count'] += 1
+            self.stats["success_count"] += 1
         else:
-            self.stats['failure_count'] += 1
+            self.stats["failure_count"] += 1
 
     def print_stats(self):
         """打印统计信息"""
@@ -297,8 +296,8 @@ class BaseScheduler(ABC):
         print(f"   - 总检查次数: {self.stats['fetch_count']}")
         print(f"   - 成功次数: {self.stats['success_count']}")
         print(f"   - 失败次数: {self.stats['failure_count']}")
-        if self.stats['fetch_count'] > 0:
-            success_rate = (self.stats['success_count'] / self.stats['fetch_count']) * 100
+        if self.stats["fetch_count"] > 0:
+            success_rate = (self.stats["success_count"] / self.stats["fetch_count"]) * 100
             print(f"   - 成功率: {success_rate:.1f}%")
 
     # ========== 主循环框架 ==========
@@ -313,11 +312,11 @@ class BaseScheduler(ABC):
         3. 循环监控
         4. 定期抓取数据
         """
-        scheduler_config = self.config.get('scheduler', {})
+        scheduler_config = self.config.get("scheduler", {})
 
         # 解析时间配置
-        start_time = self.parse_time(scheduler_config.get('start_time', '06:00'))
-        end_time = self.parse_time(scheduler_config.get('end_time', '23:59'))
+        start_time = self.parse_time(scheduler_config.get("start_time", "06:00"))
+        end_time = self.parse_time(scheduler_config.get("end_time", "23:59"))
 
         # 显示启动信息
         self._print_startup_info(scheduler_config, start_time, end_time)
@@ -351,9 +350,9 @@ class BaseScheduler(ABC):
 
                 # 检查是否需要执行抓取
                 if last_check is None or (now - last_check) >= check_interval:
-                    print(f"\n{'='*60}")
+                    print(f"\n{'=' * 60}")
                     print(f"🔍 [{now.strftime('%H:%M:%S')}] 检查 {self.data_type} 状态...")
-                    print('='*60)
+                    print("=" * 60)
 
                     # 执行抓取（带自动重连）
                     success = self._fetch_with_reconnect()
@@ -374,6 +373,7 @@ class BaseScheduler(ABC):
             print(f"\n❌ 系统错误: {e}")
             self.log(f"系统错误: {e}", "ERROR")
             import traceback
+
             traceback.print_exc()
 
     def _initialize(self) -> bool:
@@ -399,7 +399,9 @@ class BaseScheduler(ABC):
 
         return True
 
-    def _print_startup_info(self, scheduler_config: Dict[str, Any], start_time: datetime, end_time: datetime):
+    def _print_startup_info(
+        self, scheduler_config: Dict[str, Any], start_time: datetime, end_time: datetime
+    ):
         """
         打印启动信息
 
@@ -408,10 +410,12 @@ class BaseScheduler(ABC):
             start_time: 开始时间
             end_time: 结束时间
         """
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print(f"📋 {self.scheduler_name} 启动")
-        print("="*60)
-        print(f"⏰ 运行时间: {scheduler_config.get('start_time', '06:00')} - {scheduler_config.get('end_time', '23:59')}")
+        print("=" * 60)
+        print(
+            f"⏰ 运行时间: {scheduler_config.get('start_time', '06:00')} - {scheduler_config.get('end_time', '23:59')}"
+        )
         print(f"🎯 监控模式: {self.data_type} 智能监控")
         print(f"⏱️  检查间隔: {self.get_check_interval()}")
-        print("="*60)
+        print("=" * 60)

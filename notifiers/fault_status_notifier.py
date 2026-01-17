@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 故障邮件通知模块
 专门用于故障数据的状态变化通知
 """
+
 import os
 import sys
 
@@ -20,8 +20,9 @@ class FaultStatusNotifier(BaseNotifier):
     优先从 config.ini 读取配置，兼容旧的 email_config.yaml
     """
 
-    def send_fault_status_notification(self, fault_summary: str, date_str: str,
-                                      attachment: str = None, subject_prefix: str = "") -> bool:
+    def send_fault_status_notification(
+        self, fault_summary: str, date_str: str, attachment: str = None, subject_prefix: str = ""
+    ) -> bool:
         """
         发送故障状态通知
 
@@ -34,7 +35,11 @@ class FaultStatusNotifier(BaseNotifier):
         Returns:
             bool: 发送是否成功
         """
-        subject = f"{subject_prefix}故障信息报送 - {date_str}" if subject_prefix else f"故障信息报送 - {date_str}"
+        subject = (
+            f"{subject_prefix}故障信息报送 - {date_str}"
+            if subject_prefix
+            else f"故障信息报送 - {date_str}"
+        )
 
         attachments = [attachment] if attachment else None
 

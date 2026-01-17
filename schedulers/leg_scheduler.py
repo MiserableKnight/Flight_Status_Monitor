@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 航段数据调度器
 
@@ -8,15 +7,17 @@
 - 航段状态变化通知
 - 支持依赖注入
 """
+
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from .base_scheduler import BaseScheduler
 from core.flight_tracker import FlightTracker
-from notifiers.task_notifier import TaskNotifier
 from fetchers.leg_fetcher import LegFetcher
-from interfaces.interfaces import IFetcher, ILogger, IConfigLoader
+from interfaces.interfaces import IConfigLoader, IFetcher, ILogger
+from notifiers.task_notifier import TaskNotifier
+
+from .base_scheduler import BaseScheduler
 
 
 class LegScheduler(BaseScheduler):
@@ -37,10 +38,12 @@ class LegScheduler(BaseScheduler):
         scheduler = LegScheduler()
     """
 
-    def __init__(self,
-                 fetcher: Optional[IFetcher] = None,
-                 config_loader: Optional[IConfigLoader] = None,
-                 logger: Optional[ILogger] = None):
+    def __init__(
+        self,
+        fetcher: Optional[IFetcher] = None,
+        config_loader: Optional[IConfigLoader] = None,
+        logger: Optional[ILogger] = None,
+    ):
         """
         初始化 Leg 调度器（支持依赖注入）
 
@@ -57,17 +60,17 @@ class LegScheduler(BaseScheduler):
         self.data_type = "航段数据"
 
         # 初始化航班状态跟踪器
-        aircraft_list = self.config.get('aircraft_list', [])
+        aircraft_list = self.config.get("aircraft_list", [])
         self.flight_tracker = FlightTracker(monitored_aircraft=aircraft_list)
 
         # 初始化通知器（如果配置了Gmail）
-        gmail_config = self.config.get('gmail', {})
+        gmail_config = self.config.get("gmail", {})
         self.notifier = TaskNotifier(config=gmail_config) if gmail_config else None
 
         # 依赖注入：使用传入的 fetcher 或自动创建
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🔧 初始化 Leg 调度器")
-        print("="*60)
+        print("=" * 60)
 
         if fetcher is not None:
             self.leg_fetcher = fetcher
@@ -79,7 +82,7 @@ class LegScheduler(BaseScheduler):
 
         self.leg_page = None
         print("💡 监控端口: 9222")
-        print("="*60)
+        print("=" * 60)
 
     def connect_browser(self):
         """
@@ -148,12 +151,11 @@ class LegScheduler(BaseScheduler):
             if data:
                 # 保存数据
                 csv_file = self.leg_fetcher.save_to_csv(
-                    data,
-                    filename=f"leg_data_{target_date}.csv"
+                    data, filename=f"leg_data_{target_date}.csv"
                 )
 
                 if csv_file:
-                    print(f"✅ 航段数据抓取成功")
+                    print("✅ 航段数据抓取成功")
                     print(f"📄 文件路径: {csv_file}")
                     self.log(f"航段数据抓取成功: {csv_file}", "SUCCESS")
 
@@ -200,8 +202,8 @@ class LegScheduler(BaseScheduler):
                 df = pd.read_csv(leg_data_file)
                 today = self.leg_fetcher.get_today_date()
 
-                if '日期' in df.columns:
-                    today_data = df[df['日期'] == today].to_dict('records')
+                if "日期" in df.columns:
+                    today_data = df[df["日期"] == today].to_dict("records")
                 else:
                     self.log("CSV中缺少'日期'列", "ERROR")
                     today_data = []
@@ -226,7 +228,6 @@ class LegScheduler(BaseScheduler):
         try:
             # 动态导入，避免循环依赖
             import sys
-            import os
             from pathlib import Path
 
             # 添加项目根目录到路径
@@ -282,17 +283,18 @@ class LegScheduler(BaseScheduler):
 
 def main():
     """主函数"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🛫 航段数据调度器")
-    print("="*60)
+    print("=" * 60)
     print(f"启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*60)
+    print("=" * 60)
 
     scheduler = LegScheduler()
 
     # 检查命令行参数
     import sys
-    if len(sys.argv) > 1 and sys.argv[1] == '--interactive':
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--interactive":
         # 交互式模式（预留，暂不实现）
         print("⚠️ 交互式模式暂不支持")
     else:

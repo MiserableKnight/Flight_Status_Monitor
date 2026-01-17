@@ -1,12 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 接口定义
 
 定义系统中关键组件的接口契约，实现依赖注入和松耦合
 """
+
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import timedelta
+from typing import Any, Dict, List, Optional
+
 from DrissionPage import ChromiumPage
 
 
@@ -51,8 +52,9 @@ class IFetcher(ABC):
         pass
 
     @abstractmethod
-    def navigate_to_target_page(self, page: ChromiumPage, target_date: str,
-                                aircraft_list: List[str]) -> Optional[List[Dict[str, Any]]]:
+    def navigate_to_target_page(
+        self, page: ChromiumPage, target_date: str, aircraft_list: List[str]
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         导航到目标页面并提取数据
 
@@ -79,7 +81,6 @@ class IFetcher(ABC):
             str: 保存的文件路径，失败返回 None
         """
         pass
-
 
 
 class ILogger(ABC):

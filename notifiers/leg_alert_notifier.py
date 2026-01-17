@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 航段告警邮件通知模块
 专门用于航段(leg)数据的异常状态告警通知
 """
+
 import os
 import sys
 
@@ -35,7 +35,7 @@ class LegAlertNotifier(BaseNotifier):
             return True
 
         subject = f"⚠️ 航段告警 - {date_str}"
-        body = '\n'.join(alerts)
+        body = "\n".join(alerts)
 
         return self.send_email(subject, body)
 
@@ -47,6 +47,7 @@ if __name__ == "__main__":
 
     # 从配置加载器获取Gmail配置
     from config.config_loader import load_config
+
     config_loader = load_config()
     gmail_config = config_loader.get_gmail_config()
 
@@ -61,7 +62,7 @@ if __name__ == "__main__":
         test_alerts = [
             "B-656E (VJ105) 滑出30分钟仍未起飞。请确认飞机状态。",
             "B-652G (VJ106) 起飞140分钟（计划航程110分钟）仍未落地。请确认飞机状态。",
-            "B-656E (VJ118) 落地30分钟仍未停靠。请确认飞机状态。"
+            "B-656E (VJ118) 落地30分钟仍未停靠。请确认飞机状态。",
         ]
 
         success = notifier.send_alert_notification(test_alerts, "2026-01-15")

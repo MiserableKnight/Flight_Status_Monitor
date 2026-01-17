@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 航班异常检测模块
 
@@ -7,8 +6,11 @@
 - 基于航班计划配置检测异常
 - 支持未知航班、航线异常、起降机场相同等情况
 """
+
+from typing import Dict, Optional
+
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
+
 from config.flight_schedule import FlightSchedule
 
 
@@ -17,9 +19,9 @@ class AbnormalDetector:
 
     # 机场名称映射（用于简化显示）
     AIRPORT_MAPPING = {
-        'VVCS-昆仑国际机场': '昆岛',
-        'VVNB-内排国际机场': '河内',
-        'VVTS-新山一国际机场': '胡志明'
+        "VVCS-昆仑国际机场": "昆岛",
+        "VVNB-内排国际机场": "河内",
+        "VVTS-新山一国际机场": "胡志明",
     }
 
     def __init__(self):
@@ -32,11 +34,9 @@ class AbnormalDetector:
         # 格式: {航班号: {(起飞机场, 着陆机场): 航线描述}}
         self.normal_route_pairs = {}
         for flight_num, info in self.normal_flights.items():
-            dep = info['departure_airport']  # 如 'VVNB-内排国际机场'
-            arr = info['arrival_airport']    # 如 'VVCS-昆仑国际机场'
-            self.normal_route_pairs[flight_num] = {
-                (dep, arr): info['route']
-            }
+            dep = info["departure_airport"]  # 如 'VVNB-内排国际机场'
+            arr = info["arrival_airport"]  # 如 'VVCS-昆仑国际机场'
+            self.normal_route_pairs[flight_num] = {(dep, arr): info["route"]}
 
     @classmethod
     def get_airport_short(cls, airport_full: str) -> str:
@@ -60,8 +60,8 @@ class AbnormalDetector:
 
         # 动态解析：从机场代码后的名称中提取
         # 格式: "VVCI-海防吉碑国际" -> 提取 "海防吉碑"
-        if '-' in airport_str:
-            parts = airport_str.split('-', 1)
+        if "-" in airport_str:
+            parts = airport_str.split("-", 1)
             if len(parts) == 2:
                 name_part = parts[1]  # "海防吉碑国际"
 
@@ -69,11 +69,9 @@ class AbnormalDetector:
                 # "国际机场" -> 移除
                 # "机场" -> 移除
                 # "国际" -> 移除（仅在"机场"不存在时）
-                if name_part.endswith('国际机场'):
+                if name_part.endswith("国际机场"):
                     name_part = name_part[:-4]
-                elif name_part.endswith('机场'):
-                    name_part = name_part[:-2]
-                elif name_part.endswith('国际'):
+                elif name_part.endswith("机场") or name_part.endswith("国际"):
                     name_part = name_part[:-2]
 
                 return name_part if name_part else airport_str
@@ -82,10 +80,7 @@ class AbnormalDetector:
         return airport_str
 
     def detect_abnormal(
-        self,
-        flight_number: str,
-        departure_airport: str,
-        arrival_airport: str
+        self, flight_number: str, departure_airport: str, arrival_airport: str
     ) -> Optional[Dict]:
         """
         检测是否异常
@@ -115,11 +110,11 @@ class AbnormalDetector:
             arr_short = self.get_airport_short(arrival_airport)
 
             return {
-                'is_abnormal': True,
-                'abnormal_type': 'unknown_flight',
-                'original_route': '未知',  # 未知航班没有原计划
-                'actual_route': f'{dep_short}-{arr_short}',
-                'abnormal_airport': arr_short
+                "is_abnormal": True,
+                "abnormal_type": "unknown_flight",
+                "original_route": "未知",  # 未知航班没有原计划
+                "actual_route": f"{dep_short}-{arr_short}",
+                "abnormal_airport": arr_short,
             }
 
         # 情况2: 起降机场相同（明确异常）
@@ -128,11 +123,11 @@ class AbnormalDetector:
             dep_short = self.get_airport_short(departure_airport)
 
             return {
-                'is_abnormal': True,
-                'abnormal_type': 'same_airport',
-                'original_route': original_info['route'],
-                'actual_route': f'{dep_short}-{dep_short}',
-                'abnormal_airport': dep_short
+                "is_abnormal": True,
+                "abnormal_type": "same_airport",
+                "original_route": original_info["route"],
+                "actual_route": f"{dep_short}-{dep_short}",
+                "abnormal_airport": dep_short,
             }
 
         # 情况3: 城市对不匹配
@@ -145,11 +140,11 @@ class AbnormalDetector:
             arr_short = self.get_airport_short(arrival_airport)
 
             return {
-                'is_abnormal': True,
-                'abnormal_type': 'route_mismatch',
-                'original_route': original_info['route'],
-                'actual_route': f'{dep_short}-{arr_short}',
-                'abnormal_airport': arr_short
+                "is_abnormal": True,
+                "abnormal_type": "route_mismatch",
+                "original_route": original_info["route"],
+                "actual_route": f"{dep_short}-{arr_short}",
+                "abnormal_airport": arr_short,
             }
 
         # 正常情况
@@ -165,9 +160,9 @@ class AbnormalDetector:
         Returns:
             dict: 异常信息或 None
         """
-        flight_number = row.get('航班号', '')
-        departure_airport = row.get('起飞机场', '')
-        arrival_airport = row.get('着陆机场', '')
+        flight_number = row.get("航班号", "")
+        departure_airport = row.get("起飞机场", "")
+        arrival_airport = row.get("着陆机场", "")
 
         return self.detect_abnormal(flight_number, departure_airport, arrival_airport)
 
@@ -182,36 +177,28 @@ class AbnormalDetector:
             str: 中文名称
         """
         type_map = {
-            'unknown_flight': '检测到非计划航班',
-            'route_mismatch': '航线异常',
-            'same_airport': '起降机场相同'
+            "unknown_flight": "检测到非计划航班",
+            "route_mismatch": "航线异常",
+            "same_airport": "起降机场相同",
         }
-        return type_map.get(abnormal_type, '未知异常')
+        return type_map.get(abnormal_type, "未知异常")
 
 
 if __name__ == "__main__":
     # 测试代码
     print("🧪 异常检测器测试")
-    print("="*60)
+    print("=" * 60)
 
     detector = AbnormalDetector()
 
     # 测试1: 正常航班
     print("\n✅ 测试1: 正常航班 VJ105 (河内->昆岛)")
-    result = detector.detect_abnormal(
-        'VJ105',
-        'VVNB-内排国际机场',
-        'VVCS-昆仑国际机场'
-    )
+    result = detector.detect_abnormal("VJ105", "VVNB-内排国际机场", "VVCS-昆仑国际机场")
     print(f"结果: {result if result else '正常，无异常'}")
 
     # 测试2: 异常海防
     print("\n⚠️ 测试2: VJ105异常海防")
-    result = detector.detect_abnormal(
-        'VJ105',
-        'VVNB-内排国际机场',
-        'VVCI-海防吉碑国际'
-    )
+    result = detector.detect_abnormal("VJ105", "VVNB-内排国际机场", "VVCI-海防吉碑国际")
     if result:
         print(f"检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
         print(f"原计划: {result['original_route']}")
@@ -220,11 +207,7 @@ if __name__ == "__main__":
 
     # 测试3: 起降机场相同
     print("\n⚠️ 测试3: VJ112起降机场相同（胡志明-胡志明）")
-    result = detector.detect_abnormal(
-        'VJ112',
-        'VVTS-新山一国际机场',
-        'VVTS-新山一国际机场'
-    )
+    result = detector.detect_abnormal("VJ112", "VVTS-新山一国际机场", "VVTS-新山一国际机场")
     if result:
         print(f"检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
         print(f"原计划: {result['original_route']}")
@@ -233,11 +216,7 @@ if __name__ == "__main__":
 
     # 测试4: 未知航班
     print("\n⚠️ 测试4: 未知航班号 VJ999")
-    result = detector.detect_abnormal(
-        'VJ999',
-        'VVNB-内排国际机场',
-        'VVCI-海防吉碑国际'
-    )
+    result = detector.detect_abnormal("VJ999", "VVNB-内排国际机场", "VVCI-海防吉碑国际")
     if result:
         print(f"检测到异常: {detector.get_abnormal_type_description(result['abnormal_type'])}")
         print(f"系统显示: {result['actual_route']}")

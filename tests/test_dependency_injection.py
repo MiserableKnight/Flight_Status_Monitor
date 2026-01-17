@@ -1,21 +1,21 @@
-# -*- coding: utf-8 -*-
 """
 依赖注入单元测试示例
 
 演示如何使用依赖注入进行单元测试
 """
-import unittest
-import sys
+
 import os
-from unittest.mock import Mock, MagicMock, patch
+import sys
+import unittest
 from datetime import timedelta
+from unittest.mock import Mock
 
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 # 导入接口
-from interfaces.interfaces import IFetcher, ILogger, IConfigLoader
+from interfaces.interfaces import IConfigLoader, IFetcher, ILogger
 
 # 导入实际的调度器类
 from schedulers.fault_scheduler import FaultScheduler
@@ -52,6 +52,7 @@ class MockFetcher(IFetcher):
     def get_today_date(self):
         """模拟获取今天的日期"""
         from datetime import datetime
+
         return datetime.now().strftime("%Y-%m-%d")
 
     def navigate_to_target_page(self, page, target_date, aircraft_list):
@@ -104,11 +105,8 @@ class MockConfigLoader(IConfigLoader):
 
     def __init__(self, config=None):
         self.config = config or {
-            'scheduler': {
-                'start_time': '06:00',
-                'end_time': '23:59'
-            },
-            'aircraft_list': ['B-1234', 'B-5678']
+            "scheduler": {"start_time": "06:00", "end_time": "23:59"},
+            "aircraft_list": ["B-1234", "B-5678"],
         }
 
     def get_all_config(self):
@@ -136,9 +134,7 @@ class TestFaultSchedulerWithDI(unittest.TestCase):
 
         # 使用依赖注入创建调度器
         scheduler = FaultScheduler(
-            fetcher=mock_fetcher,
-            config_loader=mock_config,
-            logger=mock_logger
+            fetcher=mock_fetcher, config_loader=mock_config, logger=mock_logger
         )
 
         # 验证
@@ -167,9 +163,7 @@ class TestFaultSchedulerWithDI(unittest.TestCase):
 
         # 创建调度器
         scheduler = FaultScheduler(
-            fetcher=mock_fetcher,
-            config_loader=mock_config,
-            logger=mock_logger
+            fetcher=mock_fetcher, config_loader=mock_config, logger=mock_logger
         )
 
         # 测试连接
@@ -189,9 +183,7 @@ class TestFaultSchedulerWithDI(unittest.TestCase):
 
         # 创建调度器
         scheduler = FaultScheduler(
-            fetcher=mock_fetcher,
-            config_loader=mock_config,
-            logger=mock_logger
+            fetcher=mock_fetcher, config_loader=mock_config, logger=mock_logger
         )
 
         # 测试连接
@@ -209,9 +201,7 @@ class TestFaultSchedulerWithDI(unittest.TestCase):
 
         # 创建调度器
         scheduler = FaultScheduler(
-            fetcher=mock_fetcher,
-            config_loader=mock_config,
-            logger=mock_logger
+            fetcher=mock_fetcher, config_loader=mock_config, logger=mock_logger
         )
 
         # 设置页面
@@ -233,9 +223,7 @@ class TestFaultSchedulerWithDI(unittest.TestCase):
 
         # 创建调度器
         scheduler = FaultScheduler(
-            fetcher=mock_fetcher,
-            config_loader=mock_config,
-            logger=mock_logger
+            fetcher=mock_fetcher, config_loader=mock_config, logger=mock_logger
         )
 
         # 设置页面
@@ -255,9 +243,7 @@ class TestFaultSchedulerWithDI(unittest.TestCase):
         mock_config = MockConfigLoader()
 
         scheduler = FaultScheduler(
-            fetcher=mock_fetcher,
-            config_loader=mock_config,
-            logger=mock_logger
+            fetcher=mock_fetcher, config_loader=mock_config, logger=mock_logger
         )
 
         interval = scheduler.get_check_interval()
@@ -280,9 +266,7 @@ class TestLegSchedulerWithDI(unittest.TestCase):
 
         # 使用依赖注入创建调度器
         scheduler = LegScheduler(
-            fetcher=mock_fetcher,
-            config_loader=mock_config,
-            logger=mock_logger
+            fetcher=mock_fetcher, config_loader=mock_config, logger=mock_logger
         )
 
         # 验证
@@ -298,9 +282,7 @@ class TestLegSchedulerWithDI(unittest.TestCase):
         mock_config = MockConfigLoader()
 
         scheduler = LegScheduler(
-            fetcher=mock_fetcher,
-            config_loader=mock_config,
-            logger=mock_logger
+            fetcher=mock_fetcher, config_loader=mock_config, logger=mock_logger
         )
 
         interval = scheduler.get_check_interval()
@@ -309,6 +291,6 @@ class TestLegSchedulerWithDI(unittest.TestCase):
         self.assertEqual(interval, timedelta(minutes=1))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 运行测试
     unittest.main(verbosity=2)

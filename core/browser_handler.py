@@ -1,11 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 浏览器处理模块
 统一管理浏览器的初始化、连接和会话管理
 """
-from DrissionPage import ChromiumPage, ChromiumOptions
+
 import os
 from typing import Optional
+
+from DrissionPage import ChromiumOptions, ChromiumPage
+
 from .logger import get_logger
 
 
@@ -81,17 +83,18 @@ class BrowserHandler:
 if __name__ == "__main__":
     # 测试代码
     print("🧪 浏览器处理器测试")
-    print("="*60)
+    print("=" * 60)
 
     # 从配置加载路径
     import sys
+
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from config.config_loader import load_config
 
     config = load_config()
     paths = config.get_paths()
 
-    handler = BrowserHandler(user_data_path=paths['user_data_path'])
+    handler = BrowserHandler(user_data_path=paths["user_data_path"])
 
     print("\n🔌 尝试连接浏览器...")
     if handler.connect():

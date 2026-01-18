@@ -1,4 +1,5 @@
 repos:
+  # Ruff linter and formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.10
     hooks:
@@ -7,3 +8,13 @@ repos:
         args: [--fix]
       # Run the formatter
       - id: ruff-format
+
+  # Check project structure consistency
+  - repo: local
+    hooks:
+      - id: check-project-structure
+        name: Check project structure in README.md
+        entry: python scripts/check_project_structure.py
+        language: system
+        pass_filenames: false
+        always_run: true

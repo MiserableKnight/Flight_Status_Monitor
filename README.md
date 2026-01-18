@@ -19,6 +19,7 @@
 ### 核心功能
 
 - **🛫 航段数据监控** - 实时跟踪航班起降状态（OUT/OFF/ON/IN）
+- **⏱️ 航段告警系统** - 基于飞行时长的异常告警（起飞超时、落地超时）
 - **⚠️ 故障数据监控** - 智能过滤并推送飞机故障信息
 - **📧 Gmail 邮件通知** - 状态变化和异常事件自动告警
 - **🧠 智能导航系统** - 自动检测页面状态并跳转
@@ -31,68 +32,66 @@
 
 ```
 Flight_Status_Monitor/
-├── bin/                         # 可执行脚本目录
-│   ├── run_leg_scheduler.py     # 航段监控启动器
-│   ├── run_fault_scheduler.py   # 故障监控启动器
-│   ├── leg_monitor.bat          # 航段监控批处理（端口9222）
-│   └── faults_monitor.bat       # 故障监控批处理（端口9333）
+├── bin/                              # 生产运行脚本（系统入口点）
+│   ├── run_leg_scheduler.py          # 航段监控启动器
+│   ├── run_fault_scheduler.py        # 故障监控启动器
+│   ├── leg_monitor.bat               # 航段监控批处理（端口9222）
+│   └── faults_monitor.bat            # 故障监控批处理（端口9333）
 │
-├── config/                      # 配置目录
-│   ├── config.ini               # 核心配置文件
-│   ├── config_loader.py         # 配置加载器
-│   ├── aircraft_cfg.py          # 飞机号映射配置
-│   ├── flight_schedule.py       # 航班计划配置
-│   ├── fault_filter_rules.csv   # 故障过滤规则
+├── scripts/                          # 开发维护工具（开发者辅助工具）
+│   └── check_project_structure.py    # 项目结构检查工具
+│
+├── config/                           # 配置模块
+│   ├── config_loader.py              # 统一配置加载器（支持环境变量）
+│   ├── aircraft_cfg.py               # 飞机号映射配置
+│   ├── flight_schedule.py            # 航班计划配置
+│   ├── fault_filter_rules.csv        # 故障过滤规则
 │   └── fault_group_filter_rules.csv  # 关联故障过滤规则
 │
-├── core/                        # 核心系统模块
-│   ├── browser_handler.py       # 浏览器管理（ChromiumPage）
-│   ├── navigator.py             # 智能导航系统
-│   ├── logger.py                # 日志记录系统
-│   ├── flight_tracker.py        # 航班状态跟踪器
-│   ├── abnormal_detector.py     # 异常检测器（备降检测）
-│   ├── fault_filter.py          # 故障过滤器
-│   ├── base_monitor.py          # 监控器基类
-│   └── base_notifier.py         # 通知器基类
+├── core/                             # 核心系统模块
+│   ├── browser_handler.py            # 浏览器管理
+│   ├── navigator.py                  # 智能导航系统
+│   ├── logger.py                     # 日志记录系统
+│   ├── flight_tracker.py             # 航班状态跟踪器
+│   ├── abnormal_detector.py          # 异常检测器（备降检测）
+│   ├── fault_filter.py               # 故障过滤器
+│   ├── base_monitor.py               # 监控器基类
+│   └── base_notifier.py              # 通知器基类
 │
-├── fetchers/                    # 数据抓取器
-│   ├── base_fetcher.py          # 抓取器基类
-│   ├── login_manager.py         # 登录管理
-│   ├── leg_fetcher.py           # 航段数据抓取
-│   ├── fault_fetcher.py         # 故障数据抓取
-│   ├── fault_parser.py          # 故障数据解析
-│   └── fault_data_saver.py      # 故障数据保存
+├── fetchers/                         # 数据抓取器
+│   ├── base_fetcher.py               # 抓取器基类
+│   ├── login_manager.py              # 登录管理
+│   ├── leg_fetcher.py                # 航段数据抓取
+│   ├── fault_fetcher.py              # 故障数据抓取
+│   └── fault_parser.py               # 故障数据解析
 │
-├── processors/                  # 数据处理器
-│   ├── leg_data_update.py       # 数据更新处理
-│   ├── leg_status_monitor.py    # 航段状态监控
-│   └── fault_status_monitor.py  # 故障状态监控
+├── processors/                       # 数据处理器
+│   ├── leg_status_monitor.py         # 航段状态监控
+│   ├── leg_alert_monitor.py          # 航段告警监控
+│   └── fault_status_monitor.py       # 故障状态监控
 │
-├── notifiers/                   # 通知模块
-│   ├── leg_status_notifier.py   # 航段状态通知器
-│   ├── fault_status_notifier.py # 故障状态通知器
-│   └── task_notifier.py         # 任务通知器（统一入口）
+├── notifiers/                        # 通知模块
+│   ├── leg_status_notifier.py        # 航段状态通知器
+│   ├── leg_alert_notifier.py         # 航段告警通知器
+│   ├── fault_status_notifier.py      # 故障状态通知器
+│   └── task_notifier.py              # 任务通知器（统一入口）
 │
-├── schedulers/                  # 调度器
-│   ├── base_scheduler.py        # 调度器基类
-│   ├── leg_scheduler.py         # 航段数据调度器（端口9222）
-│   └── fault_scheduler.py       # 故障数据调度器（端口9333）
+├── schedulers/                       # 调度器
+│   ├── base_scheduler.py             # 调度器基类（依赖注入支持）
+│   ├── leg_scheduler.py              # 航段数据调度器（端口9222）
+│   └── fault_scheduler.py            # 故障数据调度器（端口9333）
 │
-├── interfaces/                  # 接口定义
-│   └── interfaces.py            # 核心接口定义
+├── interfaces/                       # 接口定义
+│   └── interfaces.py                 # 核心接口定义
 │
-├── data/                        # 数据存储目录
-│   ├── daily_raw/               # 每日原始数据
-│   ├── backup/                  # 历史备份
-│   └── leg_data.csv             # 航段数据汇总
-│
-├── logs/                        # 系统日志（保留24小时）
-├── docs/                        # 项目文档
-│   ├── SCHEDULER_GUIDE.md       # 调度模式使用指南
-│   └── TIMEZONE.md              # 时区策略说明
-│
-├── requirements.txt             # 项目依赖
-└── README.md                    # 项目说明
+├── data/                             # 数据存储目录
+├── logs/                             # 系统日志（保留24小时）
+├── tests/                            # 测试代码
+├── docs/                             # 项目文档
+├── pyproject.toml                    # Ruff 配置
+├── requirements.txt                  # 项目依赖
+├── .env.template                     # 环境变量模板
+└── README.md                         # 项目说明
 ```
 
 ---
@@ -107,48 +106,35 @@ Flight_Status_Monitor/
 | **DrissionPage** | 4.0+ | 浏览器自动化框架 |
 | **Pandas** | 2.0+ | 数据处理与分析 |
 
-### 架构设计
+### 双调度器架构
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    调度层 (Schedulers)                   │
-│  ┌──────────────────┐        ┌──────────────────┐      │
-│  │  LegScheduler    │        │ FaultScheduler   │      │
-│  │  (航段监控)       │        │  (故障监控)       │      │
-│  └────────┬─────────┘        └────────┬─────────┘      │
-└───────────┼──────────────────────────┼─────────────────┘
-            │                          │
-┌───────────┼──────────────────────────┼─────────────────┐
-│           │          抓取层 (Fetchers)│                  │
-│  ┌────────▼─────────┐        ┌───────▼──────────┐     │
-│  │   LegFetcher     │        │  FaultFetcher    │     │
-│  │  (航段数据抓取)    │        │  (故障数据抓取)    │     │
-│  └──────────────────┘        └──────────────────┘     │
-└─────────────────────────────────────────────────────────┘
-            │                          │
-┌───────────┼──────────────────────────┼─────────────────┐
-│           │        处理层 (Processors)│                  │
-│  ┌────────▼─────────┐        ┌───────▼──────────┐     │
-│  │LegStatusMonitor  │        │FaultStatusMonitor│     │
-│  │(航段状态监控)     │        │(故障状态监控)      │     │
-│  └────────┬─────────┘        └────────┬─────────┘     │
-└───────────┼──────────────────────────┼─────────────────┘
-            │                          │
-┌───────────┼──────────────────────────┼─────────────────┐
-│           │         通知层 (Notifiers)│                  │
-│  ┌────────▼─────────┐        ┌───────▼──────────┐     │
-│  │LegStatusNotifier │        │FaultStatusNotifier│    │
-│  │(航段状态通知)     │        │(故障状态通知)      │     │
-│  └──────────────────┘        └──────────────────┘     │
-└─────────────────────────────────────────────────────────┘
-            │                          │
-┌───────────┼──────────────────────────┼─────────────────┐
-│           │         核心层 (Core)     │                  │
-│  ┌────────▼─────────┐  ┌─────────────▼──┐  ┌─────────┐ │
-│  │ FlightTracker    │  │  FaultFilter    │  │ Navigator│ │
-│  │(航班状态跟踪)     │  │  (故障过滤)      │  │(智能导航)│ │
-│  └──────────────────┘  └────────────────┘  └─────────┘ │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│         调度层 (Schedulers)              │
+│  LegScheduler (9222)  FaultScheduler (9333)
+└───────────────┬─────────────────────────┘
+                │
+┌───────────────┴─────────────────────────┐
+│         抓取层 (Fetchers)                │
+│  LegFetcher       FaultFetcher           │
+└───────────────┬─────────────────────────┘
+                │
+┌───────────────┴─────────────────────────┐
+│         处理层 (Processors)              │
+│  LegStatusMonitor  FaultStatusMonitor   │
+│  LegAlertMonitor                        │
+└───────────────┬─────────────────────────┘
+                │
+┌───────────────┴─────────────────────────┐
+│         通知层 (Notifiers)               │
+│  LegStatusNotifier  FaultStatusNotifier │
+│  LegAlertNotifier                       │
+└───────────────┬─────────────────────────┘
+                │
+┌───────────────┴─────────────────────────┐
+│         核心层 (Core)                    │
+│  FlightTracker  FaultFilter  Navigator  │
+└─────────────────────────────────────────┘
 ```
 
 ### 设计模式
@@ -181,34 +167,30 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 ### 2. 配置系统
 
-复制配置模板并填写信息：
+复制环境变量模板并填写信息：
 
 ```bash
-cp config.ini.example config/config.ini
+cp .env.template .env
 ```
 
-编辑 `config/config.ini` 文件：
+编辑 `.env` 文件：
 
-```ini
-[credentials]
-username = your_username          # 系统登录账号
-password = your_password          # 登录密码
+```bash
+# 系统登录凭证
+SYSTEM_USERNAME=your_username
+SYSTEM_PASSWORD=your_password
 
-[paths]
-user_data_path = D:\path\to\chrome_debug  # Chrome用户数据目录
+# Chrome 用户数据目录
+CHROME_USER_DATA_PATH=D:\path\to\chrome_debug
 
-[aircraft]
-aircraft_list = B-652G, B-656E   # 监控的飞机号列表
+# 监控的飞机号列表
+AIRCRAFT_LIST=B-652G,B-656E
 
-[scheduler]
-start_time = 06:30               # 系统启动时间
-end_time = 21:00                 # 系统停止时间
-
-[gmail]
-sender_email = your_email@gmail.com
-app_password = your_app_password  # Gmail应用专用密码
-recipients = recipient@example.com
-sender_name = 越捷航段监控系统
+# Gmail 邮件通知配置
+GMAIL_SENDER_EMAIL=your_email@gmail.com
+GMAIL_APP_PASSWORD=your_app_password
+GMAIL_RECIPIENTS=recipient@example.com
+GMAIL_SENDER_NAME=越捷航段监控系统
 ```
 
 ### 3. 启动 Chrome 调试模式
@@ -216,7 +198,11 @@ sender_name = 越捷航段监控系统
 **方法一：命令行启动**
 
 ```bash
-chrome.exe --remote-debugging-port=9222 --user-data-dir="D:\Code\Flight_Status_Monitor\chrome_debug"
+# 航段监控（端口 9222）
+chrome.exe --remote-debugging-port=9222 --user-data-dir="D:\chrome_debug_9222"
+
+# 故障监控（端口 9333）
+chrome.exe --remote-debugging-port=9333 --user-data-dir="D:\chrome_debug_9333"
 ```
 
 **方法二：创建快捷方式**
@@ -224,7 +210,7 @@ chrome.exe --remote-debugging-port=9222 --user-data-dir="D:\Code\Flight_Status_M
 1. 右键桌面 → 新建快捷方式
 2. 目标设置为：
    ```
-   "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="D:\Code\Flight_Status_Monitor\chrome_debug"
+   "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="D:\chrome_debug_9222"
    ```
 
 ### 4. 运行系统
@@ -266,6 +252,13 @@ python -m schedulers.fault_scheduler
 - **备降检测** - 识别异常备降情况
 - **多飞机支持** - 同时监控多架飞机的多个航班
 
+### ✅ 航段告警系统
+
+- **起飞超时告警** - 超过计划起飞时间 90 分钟未起飞
+- **落地超时告警** - 飞行时长超过计划时长 30 分钟
+- **智能计算** - 基于航班计划和实际数据自动计算
+- **邮件通知** - 异常情况自动发送告警邮件
+
 ### ✅ 故障数据监控
 
 - **智能故障过滤** - 基于配置规则过滤无关故障
@@ -277,6 +270,7 @@ python -m schedulers.fault_scheduler
 ### ✅ 邮件通知系统
 
 - **航段状态通知** - 起飞、降落事件自动通知
+- **航段告警通知** - 超时异常自动告警
 - **故障通知** - 过滤后的故障信息推送
 - **状态变化检测** - 基于哈希的去重机制
 - **HTML 格式** - 美观的邮件模板
@@ -298,30 +292,108 @@ python -m schedulers.fault_scheduler
 
 ---
 
+## 开发指南
+
+### 目录结构说明
+
+项目使用两个不同的脚本目录来区分用途：
+
+- **bin/** - 生产运行脚本（系统入口点）
+  - 用户运行系统时使用的脚本和批处理文件
+  - 包括：调度器启动器、批处理脚本等
+
+- **scripts/** - 开发维护工具（开发者辅助工具）
+  - 开发者维护项目时使用的辅助工具
+  - 包括：项目结构检查、数据迁移、测试辅助等
+
+**原则**：生产运行脚本放入 `bin/`，开发辅助工具放入 `scripts/`
+
+### 代码质量工具
+
+项目使用 **Ruff** 进行代码检查和格式化：
+
+```bash
+# 运行 linter
+ruff check .
+
+# 自动修复问题
+ruff check . --fix
+
+# 格式化代码
+ruff format .
+
+# 运行 pre-commit hooks
+pre-commit run --all-files
+```
+
+### 运行测试
+
+```bash
+# 运行所有测试
+pytest tests/
+
+# 运行特定测试
+python -m pytest tests/test_fault_filter.py -v
+
+# 运行依赖注入测试
+python -m pytest tests/test_dependency_injection.py -v
+```
+
+### 添加新的数据抓取模块
+
+1. 在 `fetchers/` 目录创建新的 fetcher 类
+2. 继承 `BaseFetcher` 基类
+3. 实现必要的抓取方法
+4. 在对应的 scheduler 中调用
+
+示例：
+
+```python
+from fetchers.base_fetcher import BaseFetcher
+
+class MyFetcher(BaseFetcher):
+    def __init__(self):
+        super().__init__()
+
+    def fetch_data(self, page, target_date):
+        # 实现抓取逻辑
+        pass
+```
+
+### 添加新的数据处理流程
+
+1. 在 `processors/` 目录创建新的 processor
+2. 实现数据处理逻辑
+3. 在对应的 scheduler 中调用
+
+### 扩展通知方式
+
+在 `notifiers/` 目录添加新的通知器类（如微信、钉钉等），继承 `BaseNotifier` 基类。
+
+---
+
 ## 配置说明
 
 ### 调度时间配置
 
-在 `config.ini` 的 `[scheduler]` 部分配置：
+在 `.env` 文件中配置：
 
-```ini
-[scheduler]
-start_time = 06:30    # 系统启动时间（24小时制）
-end_time = 21:00      # 系统停止时间
+```bash
+SCHEDULER_START_TIME=06:30    # 系统启动时间
+SCHEDULER_END_TIME=21:00      # 系统停止时间
 ```
 
 ### Gmail 通知配置
 
 1. 启用 Gmail 两步验证
 2. 生成应用专用密码：https://myaccount.google.com/apppasswords
-3. 在 `config.ini` 中配置：
+3. 在 `.env` 中配置：
 
-```ini
-[gmail]
-sender_email = your_email@gmail.com
-app_password = your_app_password  # 应用专用密码（非账号密码）
-recipients = recipient1@example.com, recipient2@example.com
-sender_name = 越捷航段监控系统
+```bash
+GMAIL_SENDER_EMAIL=your_email@gmail.com
+GMAIL_APP_PASSWORD=your_app_password  # 应用专用密码（非账号密码）
+GMAIL_RECIPIENTS=recipient1@example.com,recipient2@example.com
+GMAIL_SENDER_NAME=越捷航段监控系统
 ```
 
 ### 故障过滤规则配置
@@ -358,43 +430,14 @@ B-652G,一般故障,地面,测试故障
 
 ---
 
-## 工作流程
+## 文档
 
-### 航段监控流程
-
-```mermaid
-graph LR
-    A[启动系统] --> B[连接 Chrome 调试端口]
-    B --> C[智能登录]
-    C --> D[导航到航段数据页面]
-    D --> E[抓取今日数据]
-    E --> F[保存到 CSV]
-    F --> G[更新航班状态跟踪器]
-    G --> H[检测状态变化]
-    H --> I{状态变化?}
-    I -->|是| J[发送邮件通知]
-    I -->|否| K[等待下一周期]
-    J --> K
-    K --> D
-```
-
-### 故障监控流程
-
-```mermaid
-graph LR
-    A[启动系统] --> B[连接 Chrome 调试端口]
-    B --> C[智能登录]
-    C --> D[导航到故障数据页面]
-    D --> E[抓取故障数据]
-    E --> F[应用故障过滤规则]
-    F --> G[加载航班时间数据]
-    G --> H[生成故障汇总]
-    H --> I{数据变化?}
-    I -->|是| J[发送邮件通知]
-    I -->|否| K[等待下一周期]
-    J --> K
-    K --> D
-```
+- [PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) - 项目结构详细说明
+- [SECURITY_SETUP.md](docs/SECURITY_SETUP.md) - 安全配置指南
+- [TIMEZONE.md](docs/TIMEZONE.md) - 时区策略说明
+- [dependency_injection_guide.md](docs/dependency_injection_guide.md) - 依赖注入使用指南
+- [code_analysis_report.md](docs/code_analysis_report.md) - 代码分析报告
+- [alert_data_freshness_proposal.md](docs/alert_data_freshness_proposal.md) - 告警数据新鲜度提案
 
 ---
 
@@ -402,7 +445,7 @@ graph LR
 
 ### Q1: 浏览器连接失败？
 
-**A:** 确保 Chrome 已以调试模式启动，且端口为 9222。
+**A:** 确保 Chrome 已以调试模式启动，且端口为 9222 或 9333。
 
 检查步骤：
 1. 打开任务管理器，确认 Chrome 进程存在
@@ -411,7 +454,7 @@ graph LR
 
 ### Q2: 登录失败？
 
-**A:** 检查 `config.ini` 中的用户名和密码是否正确。
+**A:** 检查 `.env` 中的用户名和密码是否正确。
 
 可能原因：
 - 用户名或密码错误
@@ -433,82 +476,49 @@ graph LR
 
 日志保留 24 小时，自动清理过期日志。
 
-### Q5: 调度时间如何配置？
+### Q5: 如何添加新的监控飞机？
 
-**A:** 在 `config.ini` 的 `[scheduler]` 部分配置 `start_time` 和 `end_time`。
+**A:** 在 `.env` 文件中修改 `AIRCRAFT_LIST`：
 
-系统会在 `start_time` 自动启动，在 `end_time` 自动停止。
-
-### Q6: 如何添加新的监控飞机？
-
-**A:** 在 `config.ini` 的 `[aircraft]` 部分修改 `aircraft_list`：
-
-```ini
-aircraft_list = B-652G, B-656E, B-XXX
+```bash
+AIRCRAFT_LIST=B-652G,B-656E,B-XXX
 ```
-
----
-
-## 开发指南
-
-### 添加新的数据抓取模块
-
-1. 在 `fetchers/` 目录创建新的 fetcher 类
-2. 继承 `BaseFetcher` 基类
-3. 实现必要的抓取方法
-4. 在对应的 scheduler 中调用
-
-示例：
-
-```python
-from fetchers.base_fetcher import BaseFetcher
-
-class MyFetcher(BaseFetcher):
-    def __init__(self):
-        super().__init__()
-
-    def fetch_data(self, page, target_date):
-        # 实现抓取逻辑
-        pass
-```
-
-### 添加新的数据处理流程
-
-1. 在 `processors/` 目录创建新的 processor
-2. 实现数据处理逻辑
-3. 在对应的 scheduler 中调用
-
-### 扩展通知方式
-
-在 `notifiers/` 目录添加新的通知器类（如微信、钉钉等），继承 `BaseNotifier` 基类。
 
 ---
 
 ## 版本历史
 
-- **V4.3.0** (2025-01-14)
+- **V4.4.2** (2026-01-18)
+  - 移除未使用的变量
+  - 更新文档
+
+- **V4.4.1** (2026-01-15)
+  - 添加首次运行时的数据刷新验证
+
+- **V4.4.0** (2026-01-14)
+  - 添加航段告警系统（起飞超时、落地超时）
+  - 改进故障过滤逻辑和邮件显示格式
+  - 添加 Ruff linter 和 pre-commit hooks
+
+- **V4.3.0** (2026-01-14)
   - 添加故障过滤功能
   - 优化故障邮件显示格式和排序逻辑
   - 重构项目架构，优化模块化和代码复用
 
-- **V4.2.0** (2025-01-13)
+- **V4.2.0** (2026-01-13)
   - 添加故障数据监控功能
   - 实现智能故障过滤系统
   - 优化邮件通知格式
 
-- **V4.1.0** (2025-01-12)
+- **V4.1.0** (2026-01-12)
   - 重构为双调度器架构（Leg + Fault）
   - 添加依赖注入支持
   - 优化模块化设计
 
-- **V4.0.0** (2025-01-11)
+- **V4.0.0** (2026-01-11)
   - 全面重构为分层架构
   - 采用 fetchers/processors 分离设计
   - 添加接口定义和依赖注入
-
-- **V3.0.0** (2026-01-11)
-  - 专注于航段状态变化监控
-  - 优化系统架构和模块化
 
 ---
 

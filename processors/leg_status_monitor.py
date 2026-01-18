@@ -21,6 +21,7 @@ import pandas as pd
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
+from config.config_loader import load_config
 from config.flight_schedule import FlightSchedule
 from core.abnormal_detector import AbnormalDetector
 from core.base_monitor import BaseStatusMonitor
@@ -54,13 +55,29 @@ class LegStatusMonitor(BaseStatusMonitor):
         """生成航班状态通知内容"""
         notifications = []
 
-        # 动态获取所有飞机（从实际数据中）
-        all_aircraft = df["执飞飞机"].unique()
+        # 从配置文件读取需要监控的飞机列表
+        config_loader = load_config()
+        configured_aircraft = config_loader.get_aircraft_list()
+        print(f"   📋 配置的监控飞机: {', '.join(configured_aircraft)}")
+
+        # 过滤数据：只保留配置的飞机
+        # 使用 str.contains() 支持短机号匹配（如 "B-652G" 可匹配 "C909-185/B-652G"）
+        filter_mask = df["执飞飞机"].str.contains("|".join(configured_aircraft), na=False)
+        df_filtered = df[filter_mask]
+
+        if len(df_filtered) == 0:
+            print(f"   ⚠️ 过滤后无数据（原始数据: {len(df)} 行）")
+            return []
+
+        print(f"   ✅ 过滤前 {len(df)} 行，过滤后 {len(df_filtered)} 行")
+
+        # 从过滤后的数据中获取所有飞机
+        all_aircraft = df_filtered["执飞飞机"].unique()
         print(f"   ✅ 检测到 {len(all_aircraft)} 架飞机")
 
         # 为每架飞机生成状态消息
         for aircraft_num in all_aircraft:
-            df_aircraft = df[df["执飞飞机"] == aircraft_num]
+            df_aircraft = df_filtered[df_filtered["执飞飞机"] == aircraft_num]
             if len(df_aircraft) > 0:
                 status_messages = self.get_current_flight_status(df_aircraft, aircraft_num)
                 notifications.extend(status_messages)

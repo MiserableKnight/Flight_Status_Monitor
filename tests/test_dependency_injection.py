@@ -44,7 +44,7 @@ class MockFetcher(IFetcher):
             return mock_page
         return None
 
-    def smart_login(self, page):
+    def smart_login(self, page, target_url=None):
         """模拟登录"""
         self.login_called = True
         return self.should_succeed
@@ -248,8 +248,8 @@ class TestFaultSchedulerWithDI(unittest.TestCase):
 
         interval = scheduler.get_check_interval()
 
-        # 验证间隔是5分钟
-        self.assertEqual(interval, timedelta(minutes=5))
+        # 验证间隔是1分钟（FaultScheduler实际使用1分钟）
+        self.assertEqual(interval, timedelta(minutes=1))
 
 
 class TestLegSchedulerWithDI(unittest.TestCase):

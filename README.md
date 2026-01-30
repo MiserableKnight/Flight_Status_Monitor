@@ -36,7 +36,8 @@ Flight_Status_Monitor/
 │   ├── run_leg_scheduler.py          # 航段监控启动器
 │   ├── run_fault_scheduler.py        # 故障监控启动器
 │   ├── leg_monitor.bat               # 航段监控批处理（端口9222）
-│   └── faults_monitor.bat            # 故障监控批处理（端口9333）
+│   ├── faults_monitor.bat            # 故障监控批处理（端口9333）
+│   └── vp.bat                        # 虚拟环境 Python 便捷脚本
 │
 ├── scripts/                          # 开发维护工具（开发者辅助工具）
 │   └── check_project_structure.py    # 项目结构检查工具
@@ -155,14 +156,31 @@ Flight_Status_Monitor/
 - Python 3.8 或更高版本
 - Windows 操作系统（支持 Chrome 浏览器）
 
-**安装依赖：**
+**创建虚拟环境（推荐）：**
 
 ```bash
-# 使用 pip 安装
+# 创建虚拟环境
+python -m venv venv
+
+# 激活虚拟环境
+venv\Scripts\activate
+
+# 安装依赖
 pip install -r requirements.txt
 
 # 或使用国内镜像加速
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+**⚠️ 重要提示：** 所有 Python 命令都需要使用虚拟环境中的 Python：
+```bash
+# 使用虚拟环境运行命令
+venv\Scripts\python.exe bin/run_leg_scheduler.py
+venv\Scripts\pytest.exe tests/
+
+# 或使用便捷脚本（推荐）
+vp -m pytest tests/
+vp bin/run_leg_scheduler.py
 ```
 
 ### 2. 配置系统
@@ -223,21 +241,25 @@ chrome.exe --remote-debugging-port=9333 --user-data-dir="D:\chrome_debug_9333"
 **方式二：命令行运行**
 
 ```bash
-# 航段监控
-python bin/run_leg_scheduler.py
+# 使用便捷脚本（推荐）
+vp bin/run_leg_scheduler.py      # 航段监控
+vp bin/run_fault_scheduler.py    # 故障监控
 
-# 故障监控
-python bin/run_fault_scheduler.py
+# 或直接使用虚拟环境 Python
+venv\Scripts\python.exe bin/run_leg_scheduler.py
+venv\Scripts\python.exe bin/run_fault_scheduler.py
 ```
 
 **方式三：模块方式运行**
 
 ```bash
-# 航段监控
-python -m schedulers.leg_scheduler
+# 使用便捷脚本
+vp -m schedulers.leg_scheduler      # 航段监控
+vp -m schedulers.fault_scheduler    # 故障监控
 
-# 故障监控
-python -m schedulers.fault_scheduler
+# 或直接使用虚拟环境 Python
+venv\Scripts\python.exe -m schedulers.leg_scheduler
+venv\Scripts\python.exe -m schedulers.fault_scheduler
 ```
 
 ---
@@ -254,10 +276,15 @@ python -m schedulers.fault_scheduler
 
 ### ✅ 航段告警系统
 
-- **起飞超时告警** - 超过计划起飞时间 90 分钟未起飞
-- **落地超时告警** - 飞行时长超过计划时长 30 分钟
+- **滑出超时告警** - 滑出(OUT)后30分钟仍未起飞(OFF)
+- **起飞超时告警** - 起飞(OFF)后超过计划航程时间+30分钟仍未落地(ON)
+- **落地超时告警** - 落地(ON)后30分钟仍未滑入(IN)
 - **智能计算** - 基于航班计划和实际数据自动计算
 - **邮件通知** - 异常情况自动发送告警邮件
+- **数据新鲜度检查** - 防止因连接断开导致的误报
+  - 自动检测数据是否是最新的（5分钟内更新）
+  - 当笔记本电脑合上或浏览器断开时，不会发送误报警告
+  - 区分"真实超时"与"连接失败"两种情况
 
 ### ✅ 故障数据监控
 
@@ -314,29 +341,47 @@ python -m schedulers.fault_scheduler
 
 ```bash
 # 运行 linter
-ruff check .
+venv\Scripts\ruff.exe check .
 
 # 自动修复问题
-ruff check . --fix
+venv\Scripts\ruff.exe check . --fix
 
 # 格式化代码
-ruff format .
+venv\Scripts\ruff.exe format .
 
 # 运行 pre-commit hooks
-pre-commit run --all-files
+venv\Scripts\python.exe -m pre_commit run --all-files
+
+# 或使用便捷脚本
+vp -m ruff check .
+```
+
+**便捷脚本说明：**
+
+项目提供了 `bin/vp.bat` 脚本，自动使用虚拟环境运行 Python 命令：
+
+```bash
+# 运行测试
+vp -m pytest tests/test_data_freshness.py -v
+
+# 运行调度器
+vp bin/run_leg_scheduler.py
+
+# 检查代码
+vp -m ruff check .
 ```
 
 ### 运行测试
 
 ```bash
-# 运行所有测试
-pytest tests/
+# 使用便捷脚本（推荐）
+vp -m pytest tests/
+vp -m pytest tests/test_data_freshness.py -v
+vp -m pytest tests/test_fault_filter.py -v
 
-# 运行特定测试
-python -m pytest tests/test_fault_filter.py -v
-
-# 运行依赖注入测试
-python -m pytest tests/test_dependency_injection.py -v
+# 或直接使用虚拟环境 Python
+venv\Scripts\python.exe -m pytest tests/
+venv\Scripts\pytest.exe tests/test_fault_filter.py -v
 ```
 
 ### 添加新的数据抓取模块
@@ -484,9 +529,53 @@ B-652G,一般故障,地面,测试故障
 AIRCRAFT_LIST=B-652G,B-656E,B-XXX
 ```
 
+### Q6: 为什么使用虚拟环境？
+
+**A:** 虚拟环境隔离项目依赖，避免与系统 Python 环境冲突。
+
+**好处：**
+- 依赖版本固定，不会因系统更新而变化
+- 不同项目可以使用不同版本的依赖
+- 避免全局安装依赖造成污染
+
+**使用方法：**
+```bash
+# 创建虚拟环境
+python -m venv venv
+
+# 激活虚拟环境（Windows）
+venv\Scripts\activate
+
+# 之后所有命令都使用虚拟环境
+vp -m pytest tests/  # 使用便捷脚本
+# 或
+venv\Scripts\python.exe -m pytest tests/  # 直接使用
+```
+
+### Q7: 笔记本合上后会误报飞机超时吗？
+
+**A:** 不会。系统具有智能数据新鲜度检查功能。
+
+**工作原理：**
+1. 每次成功获取数据后，更新数据时间戳
+2. 检查告警前，先验证数据是否是最新的（5分钟内更新）
+3. 如果数据过期（如笔记本合上导致浏览器断开），跳过超时告警
+4. 只在数据是最新的情况下，才发送超时告警
+
+**这样可以区分：**
+- **真实超时**：数据新鲜，飞机确实未落地 → 发送告警 ✓
+- **连接失败**：数据过期，浏览器断开 → 不发送误报 ✓
+
 ---
 
 ## 版本历史
+
+- **V4.5.0** (2026-01-30)
+  - **重要改进**：添加数据新鲜度检查功能，防止因连接断开导致的误报
+  - 添加虚拟环境支持和便捷脚本（`vp.bat`）
+  - 更新文档，明确虚拟环境使用要求
+  - 在笔记本电脑合上或浏览器断开时，不再误报飞机超时
+  - 区分"真实超时"与"数据获取失败"两种情况
 
 - **V4.4.2** (2026-01-18)
   - 移除未使用的变量

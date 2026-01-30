@@ -159,6 +159,9 @@ class LegScheduler(BaseScheduler):
                     print(f"📄 文件路径: {csv_file}")
                     self.log(f"航段数据抓取成功: {csv_file}", "SUCCESS")
 
+                    # 更新数据时间戳（用于告警监控判断数据新鲜度）
+                    self._update_data_timestamp()
+
                     # 更新 flight_tracker 状态
                     self._update_flight_tracker()
 
@@ -191,6 +194,29 @@ class LegScheduler(BaseScheduler):
             timedelta: 1分钟
         """
         return timedelta(minutes=1)
+
+    def _update_data_timestamp(self):
+        """更新数据时间戳文件"""
+        try:
+            import json
+            from pathlib import Path
+
+            timestamp_file = Path("data/last_data_update.json")
+            timestamp_file.parent.mkdir(parents=True, exist_ok=True)
+
+            timestamp_data = {
+                "last_update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "scheduler": "LegScheduler",
+                "date": self.leg_fetcher.get_today_date(),
+            }
+
+            with open(timestamp_file, "w", encoding="utf-8") as f:
+                json.dump(timestamp_data, f, ensure_ascii=False, indent=2)
+
+            self.log(f"数据时间戳已更新: {timestamp_data['last_update_time']}")
+
+        except Exception as e:
+            self.log(f"更新数据时间戳失败: {e}", "ERROR")
 
     def _update_flight_tracker(self):
         """更新航班状态跟踪器"""

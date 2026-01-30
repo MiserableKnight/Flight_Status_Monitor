@@ -36,6 +36,9 @@ class LegAlertMonitor:
     ALERT_THRESHOLD_OFF_ON = 30  # 起飞后超过计划航程时间+30分钟仍未落地
     ALERT_THRESHOLD_ON_IN = 30  # 落地后30分钟仍未滑入
 
+    # 数据过期阈值（秒）- 超过这个时间未更新数据认为是过期的
+    DATA_STALE_THRESHOLD = 300  # 5分钟
+
     def __init__(self, target_date=None):
         """
         初始化告警监控器
@@ -50,6 +53,9 @@ class LegAlertMonitor:
 
         # 状态文件路径
         self.alert_status_file = os.path.join(project_root, "data", "last_leg_alert_status.json")
+
+        # 数据更新时间戳文件
+        self.data_timestamp_file = os.path.join(project_root, "data", "last_data_update.json")
 
     def get_data_file_path(self):
         """获取数据文件路径"""
@@ -126,6 +132,47 @@ class LegAlertMonitor:
         now_utc = datetime.utcnow()
         beijing_time = now_utc + timedelta(hours=8)
         return beijing_time.hour * 60 + beijing_time.minute
+
+    def is_data_fresh(self):
+        """
+        检查数据是否是新鲜的
+
+        通过读取数据更新时间戳文件，判断数据是否在过期阈值内更新过
+
+        Returns:
+            bool: True=数据新鲜, False=数据过期
+        """
+        try:
+            if not os.path.exists(self.data_timestamp_file):
+                print("   ⚠️ 未找到数据更新时间戳文件")
+                return False
+
+            with open(self.data_timestamp_file, encoding="utf-8") as f:
+                timestamp_data = json.load(f)
+
+            last_update_str = timestamp_data.get("last_update_time")
+            if not last_update_str:
+                print("   ⚠️ 时间戳文件中没有更新时间")
+                return False
+
+            # 解析最后更新时间
+            last_update = datetime.strptime(last_update_str, "%Y-%m-%d %H:%M:%S")
+            current_time = datetime.now()
+
+            # 计算时间差（秒）
+            time_diff = (current_time - last_update).total_seconds()
+
+            if time_diff > self.DATA_STALE_THRESHOLD:
+                print(f"   ⚠️ 数据已过期：最后更新于 {last_update_str}（{int(time_diff)}秒前）")
+                return False
+
+            print(f"   ✅ 数据新鲜：最后更新于 {last_update_str}（{int(time_diff)}秒前）")
+            return True
+
+        except Exception as e:
+            print(f"   ⚠️ 检查数据新鲜度失败: {e}")
+            self.log(f"检查数据新鲜度失败: {e}", "WARNING")
+            return False
 
     def check_out_without_off(self, row, current_minutes):
         """
@@ -359,6 +406,14 @@ class LegAlertMonitor:
             print(f"❌ 读取数据文件失败：{e}")
             self.log(f"读取数据文件失败: {e}", "ERROR")
             return False
+
+        # 检查数据新鲜度
+        print("\n🔍 检查数据新鲜度...")
+        if not self.is_data_fresh():
+            print("   ⚠️ 数据已过期，跳过超时告警检查")
+            print("   💡 可能原因：浏览器连接断开、网络问题或数据抓取失败")
+            self.log("数据已过期，跳过超时告警检查", "WARNING")
+            return True  # 返回True避免被外层认为是失败
 
         # 检查告警
         print("\n🔍 检查告警条件...")

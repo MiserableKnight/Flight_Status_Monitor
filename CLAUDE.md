@@ -2,6 +2,27 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ CRITICAL: Always Use Virtual Environment
+
+**Python Virtual Environment Location:** `venv/`
+
+** ALWAYS use the virtual environment Python for ALL commands:**
+
+```bash
+# Windows - Use these commands:
+venv\Scripts\python.exe
+venv\Scripts\pytest.exe
+venv\Scripts\ruff.exe
+
+# Example:
+venv\Scripts\python.exe -m pytest tests/test_data_freshness.py
+venv\Scripts\python.exe bin/run_leg_scheduler.py
+```
+
+**DO NOT use:** `python`, `pytest`, `ruff` directly (they use system Python, not venv)
+
+**Reason:** Project dependencies are installed in the virtual environment. Using system Python will cause ModuleNotFoundError.
+
 ## Project Overview
 
 Flight status monitoring system for VietJet C909 aircraft operations. Uses DrissionPage (browser automation framework) to monitor leg data (OUT/OFF/ON/IN times) and fault data from a web interface, with email notifications via Gmail.
@@ -10,22 +31,22 @@ Flight status monitoring system for VietJet C909 aircraft operations. Uses Driss
 
 ```bash
 # Linting and formatting (uses Ruff)
-ruff check .                    # Run linter
-ruff check . --fix              # Auto-fix linting issues
-ruff format .                   # Format code
-pre-commit run --all-files      # Run pre-commit hooks
+venv\Scripts\ruff.exe check .                    # Run linter
+venv\Scripts\ruff.exe check . --fix              # Auto-fix linting issues
+venv\Scripts\ruff.exe format .                   # Format code
+venv\Scripts\python.exe -m pre_commit run --all-files  # Run pre-commit hooks
 
 # Run schedulers
-python bin/run_leg_scheduler.py      # Leg data monitoring (port 9222)
-python bin/run_fault_scheduler.py    # Fault monitoring (port 9333)
+venv\Scripts\python.exe bin/run_leg_scheduler.py      # Leg data monitoring (port 9222)
+venv\Scripts\python.exe bin/run_fault_scheduler.py    # Fault monitoring (port 9333)
 
 # Module execution (alternative)
-python -m schedulers.leg_scheduler
-python -m schedulers.fault_scheduler
+venv\Scripts\python.exe -m schedulers.leg_scheduler
+venv\Scripts\python.exe -m schedulers.fault_scheduler
 
 # Run tests
-pytest tests/
-python -m pytest tests/test_fault_filter.py -v
+venv\Scripts\pytest.exe tests/
+venv\Scripts\python.exe -m pytest tests/test_fault_filter.py -v
 ```
 
 ## Architecture

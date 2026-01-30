@@ -9,11 +9,14 @@
 功能：
 - 对比新旧数据，检测航班状态变化
 - 发送状态变化邮件通知
+- 数据新鲜度检查，防止使用过期数据发送错误通知
 """
 
 import hashlib
+import json
 import os
 import sys
+from datetime import datetime
 
 import pandas as pd
 
@@ -35,6 +38,9 @@ AIRPORT_MAPPING = {
     "VVTS-新山一国际机场": "胡志明",
 }
 
+# 数据过期阈值（秒）
+DATA_STALE_THRESHOLD = 300  # 5分钟
+
 
 class LegStatusMonitor(BaseStatusMonitor):
     """航班状态监控器"""
@@ -42,6 +48,8 @@ class LegStatusMonitor(BaseStatusMonitor):
     def __init__(self, target_date=None):
         super().__init__(target_date)
         self.log = get_logger()
+        # 数据时间戳文件路径
+        self.data_timestamp_file = os.path.join(project_root, "data", "last_data_update.json")
 
     def get_data_file_path(self):
         """获取数据文件路径"""
@@ -108,6 +116,65 @@ class LegStatusMonitor(BaseStatusMonitor):
             return True  # 未启用时认为发送成功
 
     # ============ 辅助方法 ============
+
+    def is_data_fresh(self):
+        """
+        检查数据是否是新鲜的
+
+        通过读取数据更新时间戳文件，判断数据是否在过期阈值内更新过
+
+        Returns:
+            bool: True=数据新鲜, False=数据过期
+        """
+        try:
+            if not os.path.exists(self.data_timestamp_file):
+                print("   ⚠️ 未找到数据更新时间戳文件")
+                return False
+
+            with open(self.data_timestamp_file, encoding="utf-8") as f:
+                timestamp_data = json.load(f)
+
+            last_update_str = timestamp_data.get("last_update_time")
+            if not last_update_str:
+                print("   ⚠️ 时间戳文件中没有更新时间")
+                return False
+
+            # 解析最后更新时间
+            last_update = datetime.strptime(last_update_str, "%Y-%m-%d %H:%M:%S")
+            now = datetime.now()
+
+            # 计算时间差
+            time_diff = (now - last_update).total_seconds()
+
+            if time_diff > DATA_STALE_THRESHOLD:
+                print(f"   ⚠️ 数据已过期：最后更新于 {last_update_str}（{int(time_diff)}秒前）")
+                return False
+
+            print(f"   ✅ 数据新鲜：最后更新于 {last_update_str}（{int(time_diff)}秒前）")
+            return True
+
+        except Exception as e:
+            print(f"   ⚠️ 检查数据新鲜度失败: {e}")
+            self.log(f"检查数据新鲜度失败: {e}", "WARNING")
+            return False
+
+    def monitor(self):
+        """
+        执行监控流程（重写基类方法，添加数据新鲜度检查）
+
+        Returns:
+            bool: 监控成功返回 True，否则返回 False
+        """
+        # 首先检查数据新鲜度
+        print("\n🔍 检查数据新鲜度...")
+        if not self.is_data_fresh():
+            print("   ⚠️ 数据已过期，跳过本次状态检查")
+            print("   💡 可能原因：浏览器连接断开、网络问题或数据抓取失败")
+            self.log("数据已过期，跳过本次状态检查", "WARNING")
+            return True  # 返回True避免被外层认为是失败
+
+        # 调用父类的监控流程
+        return super().monitor()
 
     @staticmethod
     def parse_time_vietnam(time_str):
@@ -377,6 +444,9 @@ class LegStatusMonitor(BaseStatusMonitor):
                 status_msg = f"{aircraft_num}停靠{airport}；已完成今日所有航班。"
             else:
                 next_flight = flight_sequence[last_idx + 1]
+                # 注意：这里假设下一个航班还未开始
+                # 如果下一个航班已经开始但数据过期，可能导致状态不准确
+                # 因此在 monitor() 方法中添加了数据新鲜度检查来防止这种情况
                 status_msg = f"{aircraft_num}停靠{airport}；计划执行{next_flight}。"
 
             return self.wrap_status_with_abnormal(

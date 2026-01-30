@@ -61,7 +61,6 @@ Flight_Status_Monitor/
 │
 ├── fetchers/                         # 数据抓取器
 │   ├── base_fetcher.py               # 抓取器基类
-│   ├── login_manager.py              # 登录管理
 │   ├── leg_fetcher.py                # 航段数据抓取
 │   ├── fault_fetcher.py              # 故障数据抓取
 │   └── fault_parser.py               # 故障数据解析
@@ -134,7 +133,7 @@ Flight_Status_Monitor/
                 │
 ┌───────────────┴─────────────────────────┐
 │         核心层 (Core)                    │
-│  FlightTracker  FaultFilter  Navigator  │
+│  FlightTracker  FaultFilter  AbnormalDetector │
 └─────────────────────────────────────────┘
 ```
 

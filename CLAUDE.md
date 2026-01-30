@@ -74,7 +74,7 @@ BaseFetcher (shared browser   BaseStatusMonitor            BaseNotifier
 ### Key Base Classes
 
 - **BaseScheduler** ([schedulers/base_scheduler.py](schedulers/base_scheduler.py)): Abstract base for schedulers with dependency injection support, reconnection logic, and main loop template
-- **BaseFetcher** ([fetchers/base_fetcher.py](fetchers/base_fetcher.py)): Manages Chrome debug port connections, login via LoginManager, and browser state
+- **BaseFetcher** ([fetchers/base_fetcher.py](fetchers/base_fetcher.py)): Manages Chrome debug port connections, login, and browser state
 - **BaseStatusMonitor** ([core/base_monitor.py](core/base_monitor.py)): Template method pattern for status monitoring - reads data, generates content, compares hash, sends notification
 - **BaseNotifier** ([core/base_notifier.py](core/base_notifier.py)): Email notification with hash-based deduplication
 
@@ -95,18 +95,6 @@ scheduler = LegScheduler()
 - **BrowserHandler** ([core/browser_handler.py](core/browser_handler.py)): Low-level ChromiumPage connection to debug ports
 - **BaseFetcher._browsers**: Class-level dict caching browser connections by port
 - Auto-reconnect: If page connection fails, clears cache and reconnects (handles computer sleep/wake)
-
-## Smart Navigation System
-
-**Navigator** ([core/navigator.py](core/navigator.py)) detects page state and intelligently navigates:
-
-```
-PageState detection: NEED_LOGIN | ALREADY_TARGET | IN_SYSTEM | OUT_SYSTEM | UNKNOWN
-    ↓
-smart_navigate() with optional login callback
-```
-
-Login keywords are configurable in `config.ini` under `[urls][login_keywords]`.
 
 ## Flight Tracking Logic
 

@@ -19,4 +19,11 @@ DEFAULT_BACKUP_KEEP_COUNT = 2  # 默认保留备份文件数量
 
 # 数据刷新
 QUICK_REFRESH_WAIT = 2  # 快速刷新模式等待时间（秒）
-NORMAL_REFRESH_WAIT = 3  # 正常刷新等待时间（秒）
+DATA_REFRESH_WAIT_SECONDS = 3  # 点击查询后等待数据刷新的时间（秒）
+
+# 页面加载等待
+PAGE_LOAD_WAIT_SECONDS = 3  # 等待页面DOM元素加载完成（秒）
+FRAMEWORK_LOAD_WAIT_SECONDS = 3  # 等待JavaScript框架完全加载（秒）
+
+# 重试间隔
+RETRY_INTERVAL_SECONDS = 3  # 连接/登录失败后的重试间隔（秒）

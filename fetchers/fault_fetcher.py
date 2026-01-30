@@ -15,6 +15,11 @@ import sys
 import time
 from datetime import datetime
 
+from config.constants import (
+    DATA_REFRESH_WAIT_SECONDS,
+    PAGE_LOAD_WAIT_SECONDS,
+)
+
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
@@ -205,7 +210,7 @@ class FaultFetcher(BaseFetcher):
 
         # 等待页面完全加载
         print("   ⏳ 等待页面元素加载...")
-        time.sleep(3)
+        time.sleep(PAGE_LOAD_WAIT_SECONDS)
 
         # 步骤1：选择机号
         if aircraft_list:
@@ -452,7 +457,7 @@ class FaultFetcher(BaseFetcher):
 
         # 等待数据刷新
         print("   ⏳ 等待数据刷新...")
-        time.sleep(3)
+        time.sleep(DATA_REFRESH_WAIT_SECONDS)
 
         # 获取目标机号列表（用于验证数据是否刷新完成）
         target_aircrafts = getattr(self, "_target_aircrafts", [])

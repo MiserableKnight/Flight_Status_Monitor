@@ -17,6 +17,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
+from config.constants import RETRY_INTERVAL_SECONDS
+
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
@@ -207,7 +209,7 @@ class BaseScheduler(ABC):
                 if not self.connect_browser():
                     print(f"❌ 连接失败 ({attempt + 1}/{max_retries})")
                     if attempt < max_retries - 1:
-                        time.sleep(3)
+                        time.sleep(RETRY_INTERVAL_SECONDS)
                         continue
                     return False
 
@@ -215,7 +217,7 @@ class BaseScheduler(ABC):
                 if not self.login():
                     print(f"❌ 登录失败 ({attempt + 1}/{max_retries})")
                     if attempt < max_retries - 1:
-                        time.sleep(3)
+                        time.sleep(RETRY_INTERVAL_SECONDS)
                         continue
                     return False
 
@@ -226,7 +228,7 @@ class BaseScheduler(ABC):
             except Exception as e:
                 print(f"❌ 重连异常 ({attempt + 1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
-                    time.sleep(3)
+                    time.sleep(RETRY_INTERVAL_SECONDS)
                 else:
                     print("❌ 重连失败，已达最大重试次数")
                     return False

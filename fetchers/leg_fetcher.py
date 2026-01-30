@@ -16,6 +16,12 @@ import os
 import sys
 import time
 
+from config.constants import (
+    DATA_REFRESH_WAIT_SECONDS,
+    FRAMEWORK_LOAD_WAIT_SECONDS,
+    PAGE_LOAD_WAIT_SECONDS,
+)
+
 # 添加项目根目录到路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
@@ -128,7 +134,7 @@ class LegFetcher(BaseFetcher):
 
         # 等待页面完全加载
         print("   ⏳ 等待页面元素加载...")
-        time.sleep(3)
+        time.sleep(PAGE_LOAD_WAIT_SECONDS)
 
         # 方法1: 通过查找标签文本定位
         label_ele = page.ele("tag:p@text()=序列号:")
@@ -437,7 +443,7 @@ class LegFetcher(BaseFetcher):
 
                 # 额外等待，确保JavaScript框架完全加载
                 print("   ⏳ 等待页面框架完全加载...")
-                time.sleep(3)
+                time.sleep(FRAMEWORK_LOAD_WAIT_SECONDS)
 
             # 跳转到目标页面
             print("   🚀 导航到目标页面...")
@@ -505,7 +511,7 @@ class LegFetcher(BaseFetcher):
 
         # ========== 步骤5: 等待数据加载 ==========
         print("\n⏳ 等待数据加载...")
-        time.sleep(3)
+        time.sleep(DATA_REFRESH_WAIT_SECONDS)
 
         # 等待数据容器出现
         for i in range(10):

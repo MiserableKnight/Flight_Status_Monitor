@@ -2,6 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ CRITICAL: Two Rules You MUST Follow
+
+### Rule 1: ALWAYS Use Virtual Environment
+**NEVER use system Python (`python`, `pytest`, `ruff`). Always use the virtual environment paths:**
+- `venv/Scripts/python.exe`
+- `venv/Scripts/pytest.exe`
+- `venv/Scripts/ruff.exe`
+
+### Rule 2: ALWAYS Use Forward Slashes in Bash Tool
+When executing commands via the Bash tool, **NEVER use backslashes (\)**:
+- ✅ CORRECT: `venv/Scripts/python.exe -m pytest tests/`
+- ❌ WRONG: `venv\Scripts\python.exe -m pytest tests/` (backslash is escape character, causes "command not found")
+
+### 2. Starting Monitor Systems (Manual)
+Double-click the batch files in Windows Explorer to start monitoring:
+- `bin/leg_monitor.bat` - Start leg data monitoring (port 9222)
+- `bin/faults_monitor.bat` - Start fault monitoring (port 9333)
+
+**Note:** These .bat files internally use backslashes (Windows requirement), but you never need to run them via Claude Code.
+
 ## ⚠️ CRITICAL: Always Use Virtual Environment
 
 **Python Virtual Environment Location:** `venv/`
@@ -9,19 +29,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ** ALWAYS use the virtual environment Python for ALL commands:**
 
 ```bash
-# Windows - Use these commands:
-venv\Scripts\python.exe
-venv\Scripts\pytest.exe
-venv\Scripts\ruff.exe
+# IMPORTANT: Always use forward slashes (/) in Bash tool commands
+# Backslashes (\) are escape characters in Bash and will cause errors
+
+venv/Scripts/python.exe
+venv/Scripts/pytest.exe
+venv/Scripts/ruff.exe
 
 # Example:
-venv\Scripts\python.exe -m pytest tests/test_data_freshness.py
-venv\Scripts\python.exe bin/run_leg_scheduler.py
+venv/Scripts/python.exe -m pytest tests/test_data_freshness.py
+venv/Scripts/python.exe bin/run_leg_scheduler.py
 ```
 
 **DO NOT use:** `python`, `pytest`, `ruff` directly (they use system Python, not venv)
 
 **Reason:** Project dependencies are installed in the virtual environment. Using system Python will cause ModuleNotFoundError.
+
+**NOTE:** When running commands directly in Windows PowerShell/CMD (not through Claude Code), you may use backslashes: `venv\Scripts\python.exe`
 
 ## Project Overview
 
@@ -29,25 +53,47 @@ Flight status monitoring system for VietJet C909 aircraft operations. Uses Driss
 
 ## Development Commands
 
+### For Claude Code (Automated Execution)
+
+**CRITICAL: Always use the virtual environment Python executable, NEVER use system Python**
+
 ```bash
 # Linting and formatting (uses Ruff)
-venv\Scripts\ruff.exe check .                    # Run linter
-venv\Scripts\ruff.exe check . --fix              # Auto-fix linting issues
-venv\Scripts\ruff.exe format .                   # Format code
-venv\Scripts\python.exe -m pre_commit run --all-files  # Run pre-commit hooks
+venv/Scripts/ruff.exe check .                    # Run linter
+venv/Scripts/ruff.exe check . --fix              # Auto-fix linting issues
+venv/Scripts/ruff.exe format .                   # Format code
+venv/Scripts/python.exe -m pre_commit run --all-files  # Run pre-commit hooks
 
-# Run schedulers
-venv\Scripts\python.exe bin/run_leg_scheduler.py      # Leg data monitoring (port 9222)
-venv\Scripts\python.exe bin/run_fault_scheduler.py    # Fault monitoring (port 9333)
+# Run tests (ALWAYS use virtual environment)
+venv/Scripts/pytest.exe tests/                   # Run all tests
+venv/Scripts/python.exe -m pytest tests/test_fault_filter.py -v  # Run specific test
 
-# Module execution (alternative)
-venv\Scripts\python.exe -m schedulers.leg_scheduler
-venv\Scripts\python.exe -m schedulers.fault_scheduler
-
-# Run tests
-venv\Scripts\pytest.exe tests/
-venv\Scripts\python.exe -m pytest tests/test_fault_filter.py -v
+# Module execution (for development/testing only)
+venv/Scripts/python.exe -m schedulers.leg_scheduler
+venv/Scripts/python.exe -m schedulers.fault_scheduler
 ```
+
+**NEVER run these commands:**
+```bash
+# ❌ WRONG - Uses system Python, missing project dependencies
+python -m pytest tests/
+pytest tests/
+ruff check .
+python bin/run_leg_scheduler.py
+```
+
+### Starting Monitor Systems (Manual Execution)
+
+Double-click these batch files in Windows Explorer:
+
+- `bin/leg_monitor.bat` - Start leg data monitoring (port 9222)
+- `bin/faults_monitor.bat` - Start fault monitoring (port 9333)
+
+These batch files:
+- Check if virtual environment exists
+- Clean Python cache
+- Use the correct virtual environment Python automatically
+- Display Chinese UI prompts
 
 ## Architecture
 

@@ -11,6 +11,10 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
+from exceptions.auth import LoginFailedError
+from exceptions.connection import BrowserConnectionError
+from exceptions.data import DataExtractionError, DataFileError
+from exceptions.notification import EmailSendError
 from fetchers.fault_fetcher import FaultFetcher
 from interfaces.interfaces import IConfigLoader, IFetcher, ILogger
 
@@ -89,9 +93,17 @@ class FaultScheduler(BaseScheduler):
                 return False
             print("✅ FaultFetcher 已连接")
             return True
+        except BrowserConnectionError as e:
+            print(f"❌ 浏览器连接失败: {e}")
+            self.log(f"浏览器连接失败: {e}", "ERROR")
+            return False
+        except (ConnectionError, OSError) as e:
+            print(f"❌ 网络连接失败: {e}")
+            self.log(f"网络连接失败: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"❌ 连接失败: {e}")
-            self.log(f"连接浏览器失败: {e}", "ERROR")
+            print(f"❌ 连接失败: {type(e).__name__}: {e}")
+            self.log(f"连接异常: {type(e).__name__}: {e}", "ERROR")
             return False
 
     def login(self):
@@ -113,9 +125,13 @@ class FaultScheduler(BaseScheduler):
                 return False
             print("✅ FaultFetcher 登录成功")
             return True
-        except Exception as e:
+        except LoginFailedError as e:
             print(f"❌ 登录失败: {e}")
             self.log(f"登录失败: {e}", "ERROR")
+            return False
+        except Exception as e:
+            print(f"❌ 登录异常: {type(e).__name__}: {e}")
+            self.log(f"登录异常: {type(e).__name__}: {e}", "ERROR")
             return False
 
     def get_page(self):
@@ -198,9 +214,17 @@ class FaultScheduler(BaseScheduler):
                 self.log("保存故障数据失败", "ERROR")
                 return False
 
+        except DataExtractionError as e:
+            print(f"❌ 数据提取失败: {e}")
+            self.log(f"数据提取失败: {e}", "ERROR")
+            return False
+        except DataFileError as e:
+            print(f"❌ 文件操作失败: {e}")
+            self.log(f"文件操作失败: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"❌ 故障数据抓取出错: {e}")
-            self.log(f"故障数据抓取出错: {e}", "ERROR")
+            print(f"❌ 故障数据抓取出错: {type(e).__name__}: {e}")
+            self.log(f"故障数据抓取出错: {type(e).__name__}: {e}", "ERROR")
             return False
 
     def get_check_interval(self) -> timedelta:
@@ -240,8 +264,11 @@ class FaultScheduler(BaseScheduler):
 
             return data.get("fault_count", -1)
 
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             self.log(f"读取历史故障数量失败: {e}", "ERROR")
+            return -1
+        except Exception as e:
+            self.log(f"读取历史故障数量异常: {type(e).__name__}: {e}", "ERROR")
             return -1
 
     def _send_status_notification(self, target_date: str):
@@ -271,9 +298,12 @@ class FaultScheduler(BaseScheduler):
             else:
                 print("⚠️ 故障状态监控失败")
 
-        except Exception as e:
-            self.log(f"发送故障状态通知失败: {e}", "ERROR")
+        except EmailSendError as e:
+            self.log(f"邮件发送失败: {e}", "ERROR")
             print(f"⚠️ 邮件通知执行失败: {e}")
+        except Exception as e:
+            self.log(f"发送故障状态通知异常: {type(e).__name__}: {e}", "ERROR")
+            print(f"⚠️ 邮件通知执行失败: {type(e).__name__}: {e}")
 
 
 def main():

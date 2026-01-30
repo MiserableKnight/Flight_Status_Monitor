@@ -29,6 +29,8 @@ sys.path.insert(0, project_root)
 
 from config.config_loader import load_config
 from core.logger import get_logger
+from exceptions.data import DataFileError, DataParseError
+from exceptions.notification import EmailSendError
 
 
 class BaseStatusMonitor(ABC):
@@ -142,18 +144,54 @@ class BaseStatusMonitor(ABC):
         data_file = self.get_data_file_path()
 
         if not os.path.exists(data_file):
-            self.log(f"数据文件不存在: {data_file}", "ERROR")
+            error_msg = f"数据文件不存在: {data_file}"
+            self.log(error_msg, "ERROR")
             print(f"❌ 错误：找不到数据文件 {data_file}")
-            return None
+            raise DataFileError(
+                file_path=data_file,
+                operation="read",
+                reason="文件不存在",
+            )
 
         try:
             df = pd.read_csv(data_file)
             print(f"   ✅ 读取到 {len(df)} 行数据")
             return df
+        except pd.errors.EmptyDataError as e:
+            error_msg = f"数据文件为空: {data_file}"
+            self.log(error_msg, "ERROR")
+            print(f"❌ 错误：数据文件为空 {data_file}")
+            raise DataFileError(
+                file_path=data_file,
+                operation="read",
+                reason="文件为空",
+            ) from e
+        except pd.errors.ParserError as e:
+            error_msg = f"CSV解析失败: {data_file} - {e}"
+            self.log(error_msg, "ERROR")
+            print(f"❌ 错误：CSV格式错误 {data_file}")
+            raise DataParseError(
+                source=data_file,
+                reason=str(e),
+            ) from e
+        except OSError as e:
+            error_msg = f"文件读取失败: {data_file} - {e}"
+            self.log(error_msg, "ERROR")
+            print(f"❌ 错误：无法读取文件 {data_file}")
+            raise DataFileError(
+                file_path=data_file,
+                operation="read",
+                reason=str(e),
+            ) from e
         except Exception as e:
-            self.log(f"读取数据文件失败: {e}", "ERROR")
-            print(f"❌ 读取数据文件失败：{e}")
-            return None
+            error_msg = f"未知错误: {data_file} - {type(e).__name__}: {e}"
+            self.log(error_msg, "ERROR")
+            print(f"❌ 错误：读取失败 {data_file}")
+            raise DataFileError(
+                file_path=data_file,
+                operation="read",
+                reason=f"{type(e).__name__}: {e}",
+            ) from e
 
     def load_last_status(self):
         """
@@ -172,9 +210,17 @@ class BaseStatusMonitor(ABC):
                 status_data = json.load(f)
                 print("   📋 上次状态已加载")
                 return status_data
+        except json.JSONDecodeError as e:
+            print(f"   ⚠️ 状态文件JSON格式错误: {e}")
+            self.log(f"状态文件解析失败: {status_file} - {e}", "WARNING")
+            return None
+        except OSError as e:
+            print(f"   ⚠️ 读取状态文件失败: {e}")
+            self.log(f"读取状态文件失败: {status_file} - {e}", "WARNING")
+            return None
         except Exception as e:
-            print(f"   ⚠️ 读取上次状态失败: {e}")
-            self.log(f"读取状态文件失败: {e}", "WARNING")
+            print(f"   ⚠️ 加载状态失败: {type(e).__name__}: {e}")
+            self.log(f"加载状态失败: {status_file} - {e}", "WARNING")
             return None
 
     def save_current_status(self, status_hash, **metadata):
@@ -202,9 +248,12 @@ class BaseStatusMonitor(ABC):
 
             print("   💾 已保存当前状态")
             self.log(f"状态已保存: {status_file}")
-        except Exception as e:
+        except OSError as e:
             print(f"   ⚠️ 保存状态失败: {e}")
-            self.log(f"保存状态文件失败: {e}", "WARNING")
+            self.log(f"保存状态文件失败: {status_file} - {e}", "WARNING")
+        except Exception as e:
+            print(f"   ⚠️ 保存状态失败: {type(e).__name__}: {e}")
+            self.log(f"保存状态失败: {status_file} - {e}", "WARNING")
 
     def has_status_changed(self, current_hash, last_status):
         """
@@ -263,9 +312,14 @@ class BaseStatusMonitor(ABC):
             if not content:
                 print("   ℹ️ 无通知内容")
                 return True
+        except (ValueError, KeyError) as e:
+            # 数据验证或字段缺失错误
+            print(f"❌ 数据验证失败：{e}")
+            self.log(f"数据验证失败: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"❌ 生成通知内容失败：{e}")
-            self.log(f"生成通知内容失败: {e}", "ERROR")
+            print(f"❌ 生成通知内容失败：{type(e).__name__}: {e}")
+            self.log(f"生成通知内容失败: {type(e).__name__}: {e}", "ERROR")
             return False
 
         # 3. 计算当前状态哈希
@@ -295,9 +349,17 @@ class BaseStatusMonitor(ABC):
             else:
                 print("   ⚠️ 通知发送失败")
                 return False
+        except EmailSendError as e:
+            print(f"❌ 邮件发送失败：{e}")
+            self.log(f"邮件发送失败: {e}", "ERROR")
+            return False
+        except (ConnectionError, OSError) as e:
+            print(f"❌ 网络连接失败：{e}")
+            self.log(f"网络连接失败: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"❌ 发送通知失败：{e}")
-            self.log(f"发送通知失败: {e}", "ERROR")
+            print(f"❌ 发送通知失败：{type(e).__name__}: {e}")
+            self.log(f"发送通知失败: {type(e).__name__}: {e}", "ERROR")
             return False
 
     def run(self):
@@ -309,7 +371,15 @@ class BaseStatusMonitor(ABC):
         """
         try:
             return self.monitor()
+        except DataFileError as e:
+            print(f"❌ 数据文件错误：{e}")
+            self.log(f"数据文件错误: {e}", "ERROR")
+            return False
+        except DataParseError as e:
+            print(f"❌ 数据解析错误：{e}")
+            self.log(f"数据解析错误: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"❌ 监控执行失败：{e}")
-            self.log(f"监控执行失败: {e}", "ERROR")
+            print(f"❌ 监控执行失败：{type(e).__name__}: {e}")
+            self.log(f"监控执行失败: {type(e).__name__}: {e}", "ERROR")
             return False

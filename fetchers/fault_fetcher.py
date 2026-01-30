@@ -24,6 +24,7 @@ from config.constants import (
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
+from exceptions.connection import NetworkTimeoutError, PageLoadError
 from fetchers.base_fetcher import BaseFetcher
 from fetchers.fault_data_saver import FaultDataSaver
 from fetchers.fault_parser import FaultParser
@@ -158,8 +159,24 @@ class FaultFetcher(BaseFetcher):
                         print("   ❌ 未到达目标页面，跳转失败")
                         return None
 
+            except PageLoadError as e:
+                print(f"   ❌ 页面加载失败: {e}")
+                self.log(f"页面导航失败: {e}", "ERROR")
+                print("=" * 60)
+                return None
+            except NetworkTimeoutError as e:
+                print(f"   ❌ 网络超时: {e}")
+                self.log(f"网络超时: {e}", "ERROR")
+                print("=" * 60)
+                return None
+            except (ConnectionError, OSError) as e:
+                print(f"   ❌ 连接错误: {e}")
+                self.log(f"连接失败: {e}", "ERROR")
+                print("=" * 60)
+                return None
             except Exception as e:
-                print(f"   ❌ 打开出错: {e}")
+                print(f"   ❌ 未知错误: {type(e).__name__}: {e}")
+                self.log(f"页面导航异常: {type(e).__name__}: {e}", "ERROR")
                 print("=" * 60)
                 return None
         else:
@@ -269,8 +286,14 @@ class FaultFetcher(BaseFetcher):
             aircraft_dropdown.click(by_js=True)
             time.sleep(1)
             print("   ✅ 已点击机号下拉框")
+        except (AttributeError, RuntimeError) as e:
+            # 元素访问或点击错误
+            print(f"   ❌ 点击下拉框失败: {type(e).__name__}")
+            self.log(f"点击下拉框失败: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"   ❌ 点击下拉框失败: {e}")
+            print(f"   ❌ 点击下拉框失败: {type(e).__name__}: {e}")
+            self.log(f"点击下拉框异常: {e}", "ERROR")
             return False
 
         # 等待下拉选项出现
@@ -310,8 +333,14 @@ class FaultFetcher(BaseFetcher):
                             parent.click(by_js=True)
                         else:
                             ele.click(by_js=True)
+                    except (AttributeError, RuntimeError) as e:
+                        # 元素点击相关的特定异常
+                        print(f"   ⚠️ 点击元素失败: {type(e).__name__}")
+                        self.log(f"点击飞机选择失败: {aircraft} - {e}", "WARNING")
                     except Exception as e:
-                        print(f"   ⚠️ 点击失败: {e}")
+                        # 其他未预期的异常
+                        print(f"   ⚠️ 点击失败: {type(e).__name__}: {e}")
+                        self.log(f"点击飞机选择异常: {aircraft} - {e}", "WARNING")
                     time.sleep(0.5)
                     selected_count += 1
                     found = True
@@ -323,7 +352,8 @@ class FaultFetcher(BaseFetcher):
         # 点击其他地方关闭下拉框
         try:
             page.ele("tag:body").click()
-        except:
+        except (AttributeError, RuntimeError):
+            # 元素不存在或点击失败是可接受的，静默忽略
             pass
 
         time.sleep(1)
@@ -369,8 +399,13 @@ class FaultFetcher(BaseFetcher):
             print("   ✅ 已点击'历史'按钮")
             time.sleep(1)
             return True
+        except (AttributeError, RuntimeError) as e:
+            print(f"   ❌ 点击'历史'按钮失败: {type(e).__name__}")
+            self.log(f"点击历史按钮失败: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"   ❌ 点击'历史'按钮失败: {e}")
+            print(f"   ❌ 点击'历史'按钮失败: {type(e).__name__}: {e}")
+            self.log(f"点击历史按钮异常: {e}", "ERROR")
             return False
 
     def set_date(self, page, target_date):
@@ -426,8 +461,13 @@ class FaultFetcher(BaseFetcher):
             print(f"   ✅ 日期已设置为: {target_date}")
             time.sleep(1)
             return True
+        except (AttributeError, RuntimeError) as e:
+            print(f"   ❌ JavaScript执行失败: {type(e).__name__}")
+            self.log(f"设置日期失败: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"   ❌ 设置日期失败: {e}")
+            print(f"   ❌ 设置日期失败: {type(e).__name__}: {e}")
+            self.log(f"设置日期异常: {e}", "ERROR")
             return False
 
     def quick_refresh(self, page):
@@ -492,8 +532,12 @@ class FaultFetcher(BaseFetcher):
                                         print(f"   ⚠️ 发现非目标机号数据: {aircraft_text}")
                                     else:
                                         print(f"   ✅ 发现目标机号数据: {aircraft_text}")
-                            except:
+                            except (AttributeError, RuntimeError):
+                                # 元素访问失败，静默跳过此行验证
                                 pass
+                            except Exception as e:
+                                # 其他异常记录日志但继续
+                                self.log(f"机号验证异常: {e}", "DEBUG")
 
                         if has_non_target:
                             print("   🔄 数据未刷新完成（包含旧数据），继续等待2秒...")

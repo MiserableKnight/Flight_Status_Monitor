@@ -22,6 +22,8 @@ sys.path.insert(0, project_root)
 from config.config_loader import load_config
 from config.flight_schedule import FlightSchedule
 from core.logger import get_logger
+from exceptions.data import DataFileError, DataFreshnessError
+from exceptions.notification import EmailSendError
 from notifiers.leg_alert_notifier import LegAlertNotifier
 
 
@@ -75,8 +77,14 @@ class LegAlertMonitor:
             with open(self.alert_status_file, encoding="utf-8") as f:
                 status_data = json.load(f)
                 return status_data
-        except Exception as e:
+        except json.JSONDecodeError as e:
+            self.log(f"告警状态文件JSON格式错误: {e}", "WARNING")
+            return {}
+        except OSError as e:
             self.log(f"读取告警状态文件失败: {e}", "WARNING")
+            return {}
+        except Exception as e:
+            self.log(f"读取告警状态异常: {type(e).__name__}: {e}", "WARNING")
             return {}
 
     def save_alert_status(self, status_data):
@@ -93,8 +101,10 @@ class LegAlertMonitor:
                 json.dump(status_data, f, ensure_ascii=False, indent=2)
 
             self.log(f"告警状态已保存: {self.alert_status_file}")
-        except Exception as e:
+        except OSError as e:
             self.log(f"保存告警状态文件失败: {e}", "WARNING")
+        except Exception as e:
+            self.log(f"保存告警状态异常: {type(e).__name__}: {e}", "WARNING")
 
     @staticmethod
     def parse_time_to_minutes(time_str):
@@ -113,7 +123,11 @@ class LegAlertMonitor:
         try:
             hour, minute = map(int, str(time_str).split(":"))
             return hour * 60 + minute
+        except (ValueError, AttributeError):
+            # 时间格式错误或属性访问错误
+            return None
         except Exception:
+            # 其他未预期错误
             return None
 
     @staticmethod
@@ -164,14 +178,31 @@ class LegAlertMonitor:
 
             if time_diff > self.DATA_STALE_THRESHOLD:
                 print(f"   ⚠️ 数据已过期：最后更新于 {last_update_str}（{int(time_diff)}秒前）")
-                return False
+                # 抛出数据新鲜度异常
+                raise DataFreshnessError(
+                    data_type="leg",
+                    last_update_time=last_update_str,
+                    current_time=current_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    max_age_minutes=int(self.DATA_STALE_THRESHOLD / 60),
+                )
 
             print(f"   ✅ 数据新鲜：最后更新于 {last_update_str}（{int(time_diff)}秒前）")
             return True
 
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"   ⚠️ 时间戳文件格式错误: {e}")
+            self.log(f"时间戳文件格式错误: {e}", "WARNING")
+            return False
+        except OSError as e:
+            print(f"   ⚠️ 读取时间戳文件失败: {e}")
+            self.log(f"读取时间戳文件失败: {e}", "WARNING")
+            return False
+        except DataFreshnessError:
+            # 重新抛出数据新鲜度异常
+            raise
         except Exception as e:
-            print(f"   ⚠️ 检查数据新鲜度失败: {e}")
-            self.log(f"检查数据新鲜度失败: {e}", "WARNING")
+            print(f"   ⚠️ 检查数据新鲜度失败: {type(e).__name__}: {e}")
+            self.log(f"检查数据新鲜度失败: {type(e).__name__}: {e}", "WARNING")
             return False
 
     def check_out_without_off(self, row, current_minutes):
@@ -402,17 +433,35 @@ class LegAlertMonitor:
         try:
             df = pd.read_csv(data_file)
             print(f"   ✅ 读取到 {len(df)} 行数据")
+        except pd.errors.EmptyDataError:
+            print(f"❌ 数据文件为空: {data_file}")
+            self.log(f"数据文件为空: {data_file}", "ERROR")
+            return False
+        except pd.errors.ParserError as e:
+            print(f"❌ CSV格式错误: {e}")
+            self.log(f"CSV解析失败: {e}", "ERROR")
+            return False
+        except OSError as e:
+            print(f"❌ 文件读取失败: {e}")
+            self.log(f"文件读取失败: {data_file} - {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"❌ 读取数据文件失败：{e}")
-            self.log(f"读取数据文件失败: {e}", "ERROR")
+            print(f"❌ 读取数据文件失败: {type(e).__name__}: {e}")
+            self.log(f"读取数据文件异常: {type(e).__name__}: {e}", "ERROR")
             return False
 
         # 检查数据新鲜度
         print("\n🔍 检查数据新鲜度...")
-        if not self.is_data_fresh():
-            print("   ⚠️ 数据已过期，跳过超时告警检查")
-            print("   💡 可能原因：浏览器连接断开、网络问题或数据抓取失败")
-            self.log("数据已过期，跳过超时告警检查", "WARNING")
+        try:
+            if not self.is_data_fresh():
+                print("   ⚠️ 数据已过期，跳过超时告警检查")
+                print("   💡 可能原因：浏览器连接断开、网络问题或数据抓取失败")
+                self.log("数据已过期，跳过超时告警检查", "WARNING")
+                return True  # 返回True避免被外层认为是失败
+        except DataFreshnessError as e:
+            # 数据新鲜度异常，记录详细信息
+            print(f"   ⚠️ 数据已过期: {e}")
+            self.log(f"数据新鲜度检查失败: {e}", "WARNING")
             return True  # 返回True避免被外层认为是失败
 
         # 检查告警
@@ -476,9 +525,22 @@ class LegAlertMonitor:
         """
         try:
             return self.monitor()
+        except DataFileError as e:
+            print(f"❌ 数据文件错误: {e}")
+            self.log(f"数据文件错误: {e}", "ERROR")
+            return False
+        except DataFreshnessError as e:
+            # 数据新鲜度异常不视为失败
+            print(f"⚠️ 数据新鲜度检查: {e}")
+            self.log(f"数据新鲜度检查: {e}", "WARNING")
+            return True
+        except EmailSendError as e:
+            print(f"❌ 邮件发送失败: {e}")
+            self.log(f"邮件发送失败: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"❌ 告警监控执行失败：{e}")
-            self.log(f"告警监控执行失败: {e}", "ERROR")
+            print(f"❌ 告警监控执行失败：{type(e).__name__}: {e}")
+            self.log(f"告警监控执行失败: {type(e).__name__}: {e}", "ERROR")
             import traceback
 
             traceback.print_exc()

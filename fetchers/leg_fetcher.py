@@ -228,8 +228,14 @@ class LegFetcher(BaseFetcher):
                             parent.click(by_js=True)
                         else:
                             ele.click(by_js=True)
+                    except (AttributeError, RuntimeError) as e:
+                        # 元素点击相关的特定异常
+                        print(f"   ⚠️ 点击元素失败: {type(e).__name__}")
+                        self.log(f"点击飞机选择失败: {aircraft} - {e}", "WARNING")
                     except Exception as e:
-                        print(f"   ⚠️ 点击失败: {e}")
+                        # 其他未预期的异常
+                        print(f"   ⚠️ 点击失败: {type(e).__name__}: {e}")
+                        self.log(f"点击飞机选择异常: {aircraft} - {e}", "WARNING")
                     time.sleep(0.5)
                     selected_count += 1
                     found = True
@@ -241,7 +247,8 @@ class LegFetcher(BaseFetcher):
         # 点击其他地方关闭下拉框
         try:
             page.ele("tag:body").click()
-        except:
+        except (AttributeError, RuntimeError):
+            # 元素不存在或点击失败是可接受的，静默忽略
             pass
 
         time.sleep(1)
@@ -351,8 +358,15 @@ class LegFetcher(BaseFetcher):
                         f"   📝 第{i + 1}行: {row_data[0]} - {row_data[1]} - {row_data[2]} (OUT:{row_data[6]}, OFF:{row_data[7]}, ON:{row_data[8]}, IN:{row_data[9]})"
                     )
 
+                except (AttributeError, IndexError) as e:
+                    # 元素访问或索引错误
+                    print(f"   ⚠️ 提取第{i + 1}行数据结构异常: {type(e).__name__}")
+                    self.log(f"行数据提取异常 (行{i + 1}): {e}", "DEBUG")
+                    continue
                 except Exception as e:
-                    print(f"   ⚠️ 提取第{i + 1}行失败: {e}")
+                    # 其他未预期的异常
+                    print(f"   ⚠️ 提取第{i + 1}行失败: {type(e).__name__}: {e}")
+                    self.log(f"行数据提取失败 (行{i + 1}): {e}", "WARNING")
                     continue
 
             if not data_rows:
@@ -365,8 +379,17 @@ class LegFetcher(BaseFetcher):
             print(f"\n   ✅ 成功提取 {len(data_rows)} 行数据")
             return csv_data
 
+        except AttributeError as e:
+            print(f"   ❌ 页面元素访问错误: {e}")
+            self.log(f"元素访问错误: {e}", "ERROR")
+            return None
+        except (TimeoutError, RuntimeError) as e:
+            print(f"   ❌ 数据提取超时或运行时错误: {e}")
+            self.log(f"数据提取失败: {e}", "ERROR")
+            return None
         except Exception as e:
-            print(f"   ❌ 提取数据出错: {e}")
+            print(f"   ❌ 提取数据出错: {type(e).__name__}: {e}")
+            self.log(f"数据提取失败: {type(e).__name__}: {e}", "ERROR")
             import traceback
 
             traceback.print_exc()

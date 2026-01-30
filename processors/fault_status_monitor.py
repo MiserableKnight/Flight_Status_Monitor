@@ -28,6 +28,7 @@ from config.flight_schedule import FlightSchedule
 from core.base_monitor import BaseStatusMonitor
 from core.fault_filter import FaultFilter
 from core.logger import get_logger
+from exceptions.data import DataFileError, DataParseError
 from notifiers.fault_status_notifier import FaultStatusNotifier
 
 # 机场代码到城市名称的映射
@@ -57,14 +58,24 @@ class FaultStatusMonitor(BaseStatusMonitor):
         if not os.path.exists(data_file):
             self.log(f"数据文件不存在: {data_file}", "ERROR")
             print(f"❌ 错误：找不到数据文件 {data_file}")
-            return None
+            raise DataFileError(
+                file_path=data_file,
+                operation="read",
+                reason="文件不存在",
+            )
 
         try:
             # 读取CSV文件，处理可能的编码问题
             try:
                 df = pd.read_csv(data_file, encoding="utf-8-sig")
-            except:
+            except UnicodeDecodeError:
                 df = pd.read_csv(data_file, encoding="gbk")
+            except pd.errors.EmptyDataError as e:
+                raise DataFileError(
+                    file_path=data_file,
+                    operation="read",
+                    reason="文件为空",
+                ) from e
 
             # 重命名可能的列名变体（处理编码问题）
             if "触发_time" in df.columns and "触发时间" not in df.columns:
@@ -72,10 +83,29 @@ class FaultStatusMonitor(BaseStatusMonitor):
 
             print(f"   ✅ 读取到 {len(df)} 行数据")
             return df
+        except pd.errors.ParserError as e:
+            error_msg = f"CSV解析失败: {data_file} - {e}"
+            self.log(error_msg, "ERROR")
+            print(f"❌ 错误：CSV格式错误 {data_file}")
+            raise DataParseError(source=data_file, reason=str(e)) from e
+        except OSError as e:
+            error_msg = f"文件读取失败: {data_file} - {e}"
+            self.log(error_msg, "ERROR")
+            print(f"❌ 错误：无法读取文件 {data_file}")
+            raise DataFileError(
+                file_path=data_file,
+                operation="read",
+                reason=str(e),
+            ) from e
         except Exception as e:
-            self.log(f"读取数据文件失败: {e}", "ERROR")
-            print(f"❌ 读取数据文件失败：{e}")
-            return None
+            error_msg = f"读取数据文件异常: {data_file} - {type(e).__name__}: {e}"
+            self.log(error_msg, "ERROR")
+            print(f"❌ 错误：读取失败 {data_file}")
+            raise DataFileError(
+                file_path=data_file,
+                operation="read",
+                reason=f"{type(e).__name__}: {e}",
+            ) from e
 
     def generate_content(self, df):
         """生成故障汇总内容"""

@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Optional
 
 from core.flight_tracker import FlightTracker
+from exceptions.auth import LoginFailedError
+from exceptions.connection import BrowserConnectionError
+from exceptions.data import DataExtractionError, DataFileError
+from exceptions.notification import EmailSendError
 from fetchers.leg_fetcher import LegFetcher
 from interfaces.interfaces import IConfigLoader, IFetcher, ILogger
 from notifiers.task_notifier import TaskNotifier
@@ -100,9 +104,17 @@ class LegScheduler(BaseScheduler):
                 return False
             print("✅ LegFetcher 已连接")
             return True
+        except BrowserConnectionError as e:
+            print(f"❌ 浏览器连接失败: {e}")
+            self.log(f"浏览器连接失败: {e}", "ERROR")
+            return False
+        except (ConnectionError, OSError) as e:
+            print(f"❌ 网络连接失败: {e}")
+            self.log(f"网络连接失败: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"❌ 连接失败: {e}")
-            self.log(f"连接浏览器失败: {e}", "ERROR")
+            print(f"❌ 连接失败: {type(e).__name__}: {e}")
+            self.log(f"连接异常: {type(e).__name__}: {e}", "ERROR")
             return False
 
     def login(self):
@@ -120,9 +132,13 @@ class LegScheduler(BaseScheduler):
                 return False
             print("✅ LegFetcher 登录成功")
             return True
-        except Exception as e:
+        except LoginFailedError as e:
             print(f"❌ 登录失败: {e}")
             self.log(f"登录失败: {e}", "ERROR")
+            return False
+        except Exception as e:
+            print(f"❌ 登录异常: {type(e).__name__}: {e}")
+            self.log(f"登录异常: {type(e).__name__}: {e}", "ERROR")
             return False
 
     def get_page(self):
@@ -181,9 +197,17 @@ class LegScheduler(BaseScheduler):
                 self.log("未提取到航段数据", "ERROR")
                 return False
 
+        except DataExtractionError as e:
+            print(f"❌ 数据提取失败: {e}")
+            self.log(f"数据提取失败: {e}", "ERROR")
+            return False
+        except DataFileError as e:
+            print(f"❌ 文件操作失败: {e}")
+            self.log(f"文件操作失败: {e}", "ERROR")
+            return False
         except Exception as e:
-            print(f"❌ 航段数据抓取出错: {e}")
-            self.log(f"航段数据抓取出错: {e}", "ERROR")
+            print(f"❌ 航段数据抓取出错: {type(e).__name__}: {e}")
+            self.log(f"航段数据抓取出错: {type(e).__name__}: {e}", "ERROR")
             return False
 
     def get_check_interval(self) -> timedelta:
@@ -215,8 +239,10 @@ class LegScheduler(BaseScheduler):
 
             self.log(f"数据时间戳已更新: {timestamp_data['last_update_time']}")
 
-        except Exception as e:
+        except OSError as e:
             self.log(f"更新数据时间戳失败: {e}", "ERROR")
+        except Exception as e:
+            self.log(f"更新数据时间戳异常: {type(e).__name__}: {e}", "ERROR")
 
     def _update_flight_tracker(self):
         """更新航班状态跟踪器"""
@@ -241,8 +267,12 @@ class LegScheduler(BaseScheduler):
                     # 显示状态摘要
                     print(self.flight_tracker.get_status_summary())
 
+        except (pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+            self.log(f"读取CSV失败: {e}", "ERROR")
+        except OSError as e:
+            self.log(f"文件操作失败: {e}", "ERROR")
         except Exception as e:
-            self.log(f"更新flight_tracker失败: {e}", "ERROR")
+            self.log(f"更新flight_tracker异常: {type(e).__name__}: {e}", "ERROR")
 
     def _send_status_notification(self, target_date: str):
         """
@@ -271,9 +301,12 @@ class LegScheduler(BaseScheduler):
             else:
                 print("⚠️ 状态监控失败")
 
-        except Exception as e:
-            self.log(f"发送状态通知失败: {e}", "ERROR")
+        except EmailSendError as e:
+            self.log(f"邮件发送失败: {e}", "ERROR")
             print(f"⚠️ 邮件通知执行失败: {e}")
+        except Exception as e:
+            self.log(f"发送状态通知异常: {type(e).__name__}: {e}", "ERROR")
+            print(f"⚠️ 邮件通知执行失败: {type(e).__name__}: {e}")
 
     def _send_alert_notification(self, target_date: str):
         """
@@ -302,9 +335,12 @@ class LegScheduler(BaseScheduler):
             else:
                 print("⚠️ 告警监控失败")
 
-        except Exception as e:
-            self.log(f"发送告警通知失败: {e}", "ERROR")
+        except EmailSendError as e:
+            self.log(f"告警邮件发送失败: {e}", "ERROR")
             print(f"⚠️ 告警通知执行失败: {e}")
+        except Exception as e:
+            self.log(f"发送告警通知异常: {type(e).__name__}: {e}", "ERROR")
+            print(f"⚠️ 告警通知执行失败: {type(e).__name__}: {e}")
 
 
 def main():

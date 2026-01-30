@@ -25,6 +25,8 @@ sys.path.insert(0, project_root)
 
 from config.config_loader import load_config
 from core.logger import get_logger
+from exceptions.auth import LoginFailedError, SessionExpiredError
+from exceptions.connection import BrowserConnectionError
 from interfaces.interfaces import IConfigLoader, ILogger
 
 
@@ -164,7 +166,9 @@ class BaseScheduler(ABC):
             # 尝试获取页面URL（轻量级检测）
             _ = page.url
             return True
-        except Exception:
+        except (AttributeError, ConnectionError, OSError) as e:
+            # 具体捕获页面连接相关的异常
+            self.log(f"页面连接检测失败: {type(e).__name__}", "DEBUG")
             return False
 
     def _reconnect_browser(self, max_retries=3):
@@ -196,8 +200,9 @@ class BaseScheduler(ABC):
                 print(f"   ✅ 已清理端口: {cleared_ports}")
             else:
                 print("   ℹ️ 无旧连接需要清理")
-        except Exception as e:
+        except (ImportError, AttributeError) as e:
             print(f"   ⚠️ 清理旧连接时出错: {e}")
+            self.log(f"清理旧连接失败: {e}", "WARNING")
 
         for attempt in range(max_retries):
             try:
@@ -225,12 +230,53 @@ class BaseScheduler(ABC):
                 print("=" * 60)
                 return True
 
-            except Exception as e:
-                print(f"❌ 重连异常 ({attempt + 1}/{max_retries}): {e}")
+            except BrowserConnectionError as e:
+                # 浏览器连接异常
+                print(f"❌ 浏览器连接异常 ({attempt + 1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     time.sleep(RETRY_INTERVAL_SECONDS)
                 else:
                     print("❌ 重连失败，已达最大重试次数")
+                    self.log(f"重连失败: {e}", "ERROR")
+                    return False
+            except LoginFailedError as e:
+                # 登录失败异常
+                print(f"❌ 登录失败 ({attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(RETRY_INTERVAL_SECONDS)
+                else:
+                    print("❌ 重连失败（登录），已达最大重试次数")
+                    self.log(f"登录失败: {e}", "ERROR")
+                    return False
+            except SessionExpiredError as e:
+                # 会话过期异常
+                print(f"❌ 会话过期 ({attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(RETRY_INTERVAL_SECONDS)
+                else:
+                    print("❌ 重连失败（会话过期），已达最大重试次数")
+                    self.log(f"会话过期: {e}", "ERROR")
+                    return False
+            except (ConnectionError, OSError) as e:
+                # 网络连接异常
+                print(f"❌ 网络连接异常 ({attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(RETRY_INTERVAL_SECONDS)
+                else:
+                    print("❌ 重连失败（网络），已达最大重试次数")
+                    self.log(f"网络连接失败: {e}", "ERROR")
+                    return False
+            except Exception as e:
+                # 其他未预期的异常
+                print(f"❌ 未知异常 ({attempt + 1}/{max_retries}): {type(e).__name__}: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(RETRY_INTERVAL_SECONDS)
+                else:
+                    print("❌ 重连失败，已达最大重试次数")
+                    self.log(f"重连失败(未知错误): {e}", "ERROR")
+                    import traceback
+
+                    traceback.print_exc()
                     return False
 
         return False
@@ -371,9 +417,22 @@ class BaseScheduler(ABC):
         except KeyboardInterrupt:
             print("\n\n⚠️ 收到中断信号，正在退出...")
             self.print_stats()
+        except BrowserConnectionError as e:
+            print(f"\n❌ 浏览器连接错误: {e}")
+            self.log(f"浏览器连接错误: {e}", "ERROR")
+            self.print_stats()
+        except LoginFailedError as e:
+            print(f"\n❌ 登录失败: {e}")
+            self.log(f"登录失败: {e}", "ERROR")
+            self.print_stats()
+        except (ConnectionError, OSError) as e:
+            print(f"\n❌ 网络连接错误: {e}")
+            self.log(f"网络连接错误: {e}", "ERROR")
+            self.print_stats()
         except Exception as e:
-            print(f"\n❌ 系统错误: {e}")
-            self.log(f"系统错误: {e}", "ERROR")
+            print(f"\n❌ 系统错误: {type(e).__name__}: {e}")
+            self.log(f"系统错误: {type(e).__name__}: {e}", "ERROR")
+            self.print_stats()
             import traceback
 
             traceback.print_exc()

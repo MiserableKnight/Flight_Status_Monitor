@@ -37,6 +37,7 @@ ignore = [
     "B008",  # 函数调用作为默认参数（常见于依赖注入）
     "E402",  # 模块导入不在顶部（项目使用 sys.path.insert）
     "N999",  # 模块名包含下划线（项目名称 Flight_Status_Monitor）
+    "N818",  # 异常名以Exception结尾（项目设计选择）
     "B024",  # 抽象基类没有抽象方法（BaseNotifier 用作接口）
     "E722",  # 裸 except（现有代码逻辑）
     "SIM102", "SIM103", "SIM105", "SIM108", "SIM401",  # 代码简化建议（可选优化）

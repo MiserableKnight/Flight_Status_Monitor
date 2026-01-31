@@ -4,15 +4,16 @@ Data Processors Module - 数据处理器模块
 This module provides data processing, monitoring, and alerting capabilities.
 All processors follow the template method pattern defined in BaseMonitor.
 
-## Leg Data Processing（航段数据处理）
+## Components（组件列表）
 
-### LegDataUpdate
+### Leg Data Processing（航段数据处理）
+
+#### leg_data_update.py - LegDataUpdate
 Updates cumulative leg data CSV from daily raw data.
 Features:
 - Merges today's data with historical data
 - Removes duplicates based on (date, aircraft, flight)
 - Automatic CSV sorting and formatting
-- Preserves data integrity
 
 Usage:
 ```python
@@ -21,13 +22,12 @@ updater = LegDataUpdate(daily_file="data/daily_raw/leg_data_2026-01-30.csv")
 updater.update()
 ```
 
-### LegStatusMonitor
+#### leg_status_monitor.py - LegStatusMonitor
 Monitors leg status changes and sends email notifications.
 Features:
 - Hash-based change detection (MD5 of content)
 - Detects OUT/OFF/ON/IN time updates
 - Sends Vietnam time formatted emails
-- Tracks last state to detect changes
 
 Triggers notification when:
 - OUT time appears (pushback started)
@@ -39,31 +39,30 @@ Usage:
 ```python
 from processors import LegStatusMonitor
 monitor = LegStatusMonitor()
-monitor.run()  # Reads data, detects changes, sends notifications
+monitor.run()
 ```
 
-### LegAlertMonitor
+#### leg_alert_monitor.py - LegAlertMonitor
 Monitors flight duration and triggers alerts for abnormal flights.
 Features:
 - Checks flight duration thresholds
-- Monitors data freshness (alerts if data too old)
+- Monitors data freshness
 - Tracks alert state to avoid duplicate notifications
-- Separated from LegStatusMonitor for independent alerting
 
 Alert conditions:
-- Flight duration exceeds threshold (e.g., > 150 minutes for 110min scheduled)
-- Data freshness check fails (no update for configured minutes)
+- Flight duration exceeds threshold
+- Data freshness check fails
 
 Usage:
 ```python
 from processors import LegAlertMonitor
 monitor = LegAlertMonitor()
-monitor.run()  # Checks duration and freshness, sends alerts
+monitor.run()
 ```
 
-## Fault Data Processing（故障数据处理）
+### Fault Data Processing（故障数据处理）
 
-### FaultStatusMonitor
+#### fault_status_monitor.py - FaultStatusMonitor
 Monitors fault data changes and sends email notifications.
 Features:
 - Hash-based change detection
@@ -75,33 +74,18 @@ Usage:
 ```python
 from processors import FaultStatusMonitor
 monitor = FaultStatusMonitor()
-monitor.run()  # Reads data, detects changes, sends notifications
+monitor.run()
 ```
 
 ## Architecture（架构设计）
 
 ### Template Method Pattern
 All processors inherit from BaseMonitor (core/base_monitor.py):
-
-```
-run()
-  ↓
-read_data_file()           # Read current data from CSV
-  ↓
-load_last_status()         # Load previous state (hash)
-  ↓
-generate_content()         # Generate notification content
-  ↓ (if changed)
-send_notification()        # Send email via notifier
-  ↓
-save_current_status()      # Save current state (hash)
-```
-
-### Hash-Based Change Detection
-- MD5 hash of data content (or JSON representation)
-- Stored in status files (e.g., data/leg_status.json)
-- Only send notification if hash changes
-- Prevents duplicate notifications
+- read_data_file() - Read current data from CSV
+- load_last_status() - Load previous state (hash)
+- generate_content() - Generate notification content
+- send_notification() - Send email via notifier
+- save_current_status() - Save current state (hash)
 
 ### Data Flow（数据流）
 
@@ -123,29 +107,6 @@ Notifiers (send emails)
 - Daily raw data: `data/daily_raw/leg_data_YYYY-MM-DD.csv`
 - Cumulative data: `data/leg_data.csv`
 - Status files: `data/leg_status.json`, `data/leg_alert_state.json`, `data/fault_status.json`
-
-### Thresholds
-- Flight duration alert: configured in LegAlertMonitor
-- Data freshness alert: configured in LegAlertMonitor
-- Check interval: configured in schedulers
-
-## Usage Example（完整示例）
-
-```python
-from processors import LegDataUpdate, LegStatusMonitor, LegAlertMonitor
-
-# Update cumulative data
-updater = LegDataUpdate(daily_file="data/daily_raw/leg_data_2026-01-30.csv")
-updater.update()
-
-# Monitor status changes
-status_monitor = LegStatusMonitor()
-status_monitor.run()
-
-# Monitor for alerts (separate from status)
-alert_monitor = LegAlertMonitor()
-alert_monitor.run()
-```
 
 ## Dependencies
 

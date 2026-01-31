@@ -70,7 +70,7 @@ GMAIL_APP_PASSWORD=your_app_password
 GMAIL_RECIPIENTS=recipient@example.com
 
 # 监控的飞机号列表
-AIRCRAFT_LIST=B-652G,B-656E
+AIRCRAFT_LIST=B-XXXX,B-XXXX
 ```
 
 📖 **详细配置指南**: [docs/guides/security-setup.md](docs/guides/security-setup.md)
@@ -315,6 +315,14 @@ AIRCRAFT_LIST=B-652G,B-656E,B-XXX
 ---
 
 ## 📋 版本历史
+
+- **BETA4.6.4** (2026-01-31)
+  - 统一文档版本号管理，与 git tag 保持一致
+  - 完善所有模块 docstring，确保与实际组件一致
+  - 修复文档中的错误引用（移除不存在的 navigator.py）
+  - 更新所有文档版本号为 BETA4.6.4
+  - 添加 DataFreshnessError 异常导出
+  - 修复安全配置文档中的命令示例（使用虚拟环境路径）
 
 - **V4.5.0** (2026-01-30)
   - 添加数据新鲜度检查功能，防止因连接断开导致的误报

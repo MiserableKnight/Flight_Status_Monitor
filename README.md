@@ -156,18 +156,64 @@ python -c "import schedulers; help(schedulers)"
 
 ## 🏗️ 技术架构
 
-### 双调度器设计
+### 系统架构图
 
+```mermaid
+graph LR
+    subgraph "调度层 Schedulers"
+        LS[LegScheduler<br/>端口: 9222<br/>监控: 航段数据]
+        FS[FaultScheduler<br/>端口: 9333<br/>监控: 故障数据]
+    end
+
+    subgraph "抓取层 Fetchers"
+        LF[LegFetcher<br/>提取: OUT/OFF/ON/IN]
+        FF[FaultFetcher<br/>提取: 故障信息]
+        BF[BaseFetcher<br/>共享: 浏览器连接管理]
+    end
+
+    subgraph "处理层 Processors"
+        LM[LegMonitor<br/>检测: 航段状态变化]
+        FM[FaultMonitor<br/>检测: 故障出现]
+        BM[BaseStatusMonitor<br/>共享: 哈希变化检测]
+    end
+
+    subgraph "通知层 Notifiers"
+        LN[LegNotifier<br/>邮件: 航段状态+超时告警]
+        FN[FaultNotifier<br/>邮件: 过滤后的故障]
+        BN[BaseNotifier<br/>共享: 哈希去重]
+    end
+
+    subgraph "核心层 Core"
+        BH[BrowserHandler<br/>Chrome 调试端口连接]
+        FT[FlightTracker<br/>飞行阶段跟踪]
+    end
+
+    LS --> LF
+    FS --> FF
+    LF --> BF
+    FF --> BF
+    LF --> LM
+    FF --> FM
+    LM --> BM
+    FM --> BM
+    LM --> LN
+    FM --> FN
+    LN --> BN
+    FN --> BN
+    BF --> BH
+    BM --> FT
+
+    style LS fill:#e1f5ff
+    style FS fill:#fff4e1
+    style LF fill:#e8f5e9
+    style FF fill:#e8f5e9
+    style LM fill:#fce4ec
+    style FM fill:#fce4ec
+    style LN fill:#f3e5f5
+    style FN fill:#f3e5f5
 ```
-┌─────────────────────────────────────────┐
-│         调度层 (Schedulers)              │
-│  LegScheduler (9222)  FaultScheduler (9333)
-└───────────────┬─────────────────────────┘
-                │
-┌───────────────┴─────────────────────────┐
-│         抓取层 → 处理层 → 通知层         │
-└─────────────────────────────────────────┘
-```
+
+### 双调度器设计
 
 **设计模式：**
 - 分层架构 - Fetchers/Processors/Notifiers 职责分离
@@ -309,7 +355,7 @@ python bin/run_leg_scheduler.py                    # ❌ 错误（使用系统 P
 **A:** 在 `.env` 文件中修改 `AIRCRAFT_LIST`：
 
 ```bash
-AIRCRAFT_LIST=B-652G,B-656E,B-XXX
+AIRCRAFT_LIST=B-XXXX,B-XXXX
 ```
 
 ---

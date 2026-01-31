@@ -13,8 +13,8 @@ repos:
   - repo: local
     hooks:
       - id: check-project-structure
-        name: Check project structure in README.md
-        entry: python scripts/check_project_structure.py
+        name: Check project structure in README.md and docs
+        entry: python scripts/run_checker.py
         language: system
         pass_filenames: false
         always_run: true

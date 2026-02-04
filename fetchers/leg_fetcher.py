@@ -132,68 +132,104 @@ class LegFetcher(BaseFetcher):
         """
         print("\n📋 开始选择飞机...")
 
-        # 等待页面完全加载
+        # 1. 等待并定位下拉框
+        if not self._locate_and_open_dropdown(page):
+            return False
+
+        # 2. 等待下拉选项出现
+        time.sleep(2)
+
+        # 3. 清空所有已选项
+        self._clear_all_selections(page)
+
+        # 4. 选择目标飞机
+        selected_count = self._select_target_aircrafts(page, aircraft_list)
+
+        # 5. 关闭下拉框
+        self._close_dropdown(page)
+
+        # 6. 返回结果
+        if selected_count > 0:
+            print(f"   ✅ 成功选择 {selected_count} 架飞机")
+            return True
+        else:
+            print("   ❌ 未能选择任何飞机")
+            return False
+
+    def _locate_and_open_dropdown(self, page):
+        """等待并打开序列号下拉框"""
         print("   ⏳ 等待页面元素加载...")
         time.sleep(PAGE_LOAD_WAIT_SECONDS)
 
-        # 方法1: 通过查找标签文本定位
+        # 通过标签定位或直接查找
+        return self._find_and_click_dropdown(page)
+
+    def _find_and_click_dropdown(self, page):
+        """查找并点击序列号下拉框（通过标签或直接查找）"""
+        # 方法1: 通过标签定位
         label_ele = page.ele("tag:p@text()=序列号:")
         if label_ele:
             print("   ✅ 找到标签: 序列号")
-
-            # 找到标签旁边的下拉框 div
-            aircraft_dropdown = None
-
-            # 方法1: 查找标签的父元素,然后找同级的下拉框
-            parent = label_ele.parent()
-            if parent:
-                # 在父元素的同级或兄弟元素中查找 filter-option
-                dropdown = parent.ele("tag:div@@class=filter-option")
-                if dropdown:
-                    aircraft_dropdown = dropdown
-                    print("   ✅ 通过父元素找到下拉框")
-                else:
-                    # 尝试查找父元素的下一个兄弟元素
-                    next_sibling = parent.next()
-                    if next_sibling:
-                        dropdown = next_sibling.ele("tag:div@@class=filter-option")
-                        if dropdown:
-                            aircraft_dropdown = dropdown
-                            print("   ✅ 通过兄弟元素找到下拉框")
-
-            # 方法2: 如果上面都失败,直接查找所有 filter-option
-            if not aircraft_dropdown:
-                all_dropdowns = page.eles("tag:div@@class=filter-option")
-                if len(all_dropdowns) > 0:
-                    # 通常是第一个或第二个
-                    aircraft_dropdown = all_dropdowns[0]
-                    print(f"   ✅ 找到 {len(all_dropdowns)} 个下拉框,使用第一个")
-
-            if aircraft_dropdown:
-                aircraft_dropdown.click(by_js=True)
+            dropdown = self._find_dropdown_near_label(label_ele)
+            if dropdown:
+                dropdown.click(by_js=True)
                 time.sleep(1)
                 print("   ✅ 已点击序列号下拉框")
+                return True
             else:
                 print("   ❌ 未找到序列号下拉框")
                 return False
         else:
-            print("   ❌ 未找到'序列号'标签")
-            print("   🔍 尝试直接定位下拉框...")
-            # 直接查找所有 filter-option
-            all_dropdowns = page.eles("tag:div@@class=filter-option")
-            if len(all_dropdowns) > 0:
-                print(f"   ✅ 找到 {len(all_dropdowns)} 个下拉框")
-                all_dropdowns[0].click(by_js=True)
-                time.sleep(1)
-                print("   ✅ 已点击第一个下拉框")
+            # 方法2: 直接查找第一个下拉框
+            return self._find_and_click_first_dropdown(page)
+
+    def _find_dropdown_near_label(self, label_ele):
+        """在标签附近查找下拉框"""
+        aircraft_dropdown = None
+
+        # 查找标签的父元素,然后找同级的下拉框
+        parent = label_ele.parent()
+        if parent:
+            # 在父元素的同级或兄弟元素中查找 filter-option
+            dropdown = parent.ele("tag:div@@class=filter-option")
+            if dropdown:
+                aircraft_dropdown = dropdown
+                print("   ✅ 通过父元素找到下拉框")
             else:
-                print("   ❌ 未找到任何下拉框")
-                return False
+                # 尝试查找父元素的下一个兄弟元素
+                next_sibling = parent.next()
+                if next_sibling:
+                    dropdown = next_sibling.ele("tag:div@@class=filter-option")
+                    if dropdown:
+                        aircraft_dropdown = dropdown
+                        print("   ✅ 通过兄弟元素找到下拉框")
 
-        # 等待下拉选项出现
-        time.sleep(2)
+        # 如果上面都失败,直接查找所有 filter-option
+        if not aircraft_dropdown:
+            all_dropdowns = label_ele.page.eles("tag:div@@class=filter-option")
+            if len(all_dropdowns) > 0:
+                aircraft_dropdown = all_dropdowns[0]
+                print(f"   ✅ 找到 {len(all_dropdowns)} 个下拉框,使用第一个")
 
-        # 先取消所有已选择的飞机选项(清空所有选项)
+        return aircraft_dropdown
+
+    def _find_and_click_first_dropdown(self, page):
+        """直接查找并点击第一个下拉框"""
+        print("   ❌ 未找到'序列号'标签")
+        print("   🔍 尝试直接定位下拉框...")
+        all_dropdowns = page.eles("tag:div@@class=filter-option")
+        if len(all_dropdowns) > 0:
+            print(f"   ✅ 找到 {len(all_dropdowns)} 个下拉框")
+            all_dropdowns[0].click(by_js=True)
+            time.sleep(1)
+            print("   ✅ 已点击第一个下拉框")
+            return True
+        else:
+            print("   ❌ 未找到任何下拉框")
+            return False
+
+    def _clear_all_selections(self, page):
+        """清空所有已选择的飞机选项"""
         print("   🔍 清空所有已选项...")
         text_elements = page.eles("tag:span@@class=text")
         for ele in text_elements:
@@ -201,7 +237,6 @@ class LegFetcher(BaseFetcher):
             if parent:
                 parent_attr = parent.attr("class") or ""
                 if "selected" in parent_attr or "active" in parent_attr:
-                    # 取消所有选中的选项
                     text = ele.text.strip()
                     print(f"   🔄 取消选择: {text}")
                     parent.click(by_js=True)
@@ -209,42 +244,48 @@ class LegFetcher(BaseFetcher):
 
         time.sleep(1)
 
-        # 选择指定的飞机(直接匹配飞机号)
+    def _select_target_aircrafts(self, page, aircraft_list):
+        """选择目标飞机列表"""
         print("   🎯 开始选择目标飞机...")
         selected_count = 0
 
         for aircraft in aircraft_list:
-            # 重新获取元素列表
-            text_elements = page.eles("tag:span@@class=text")
-            found = False
-            for ele in text_elements:
-                text = ele.text.strip()
-                # 使用包含匹配
-                if aircraft in text:
-                    print(f"   ✅ 选择飞机: {text}")
-                    try:
-                        parent = ele.parent()
-                        if parent:
-                            parent.click(by_js=True)
-                        else:
-                            ele.click(by_js=True)
-                    except (AttributeError, RuntimeError) as e:
-                        # 元素点击相关的特定异常
-                        print(f"   ⚠️ 点击元素失败: {type(e).__name__}")
-                        self.log(f"点击飞机选择失败: {aircraft} - {e}", "WARNING")
-                    except Exception as e:
-                        # 其他未预期的异常
-                        print(f"   ⚠️ 点击失败: {type(e).__name__}: {e}")
-                        self.log(f"点击飞机选择异常: {aircraft} - {e}", "WARNING")
-                    time.sleep(0.5)
-                    selected_count += 1
-                    found = True
-                    break
+            if self._select_single_aircraft(page, aircraft):
+                selected_count += 1
 
-            if not found:
-                print(f"   ⚠️ 未找到飞机: {aircraft}")
+        return selected_count
 
-        # 点击其他地方关闭下拉框
+    def _select_single_aircraft(self, page, aircraft):
+        """选择单架飞机"""
+        # 重新获取元素列表
+        text_elements = page.eles("tag:span@@class=text")
+        for ele in text_elements:
+            text = ele.text.strip()
+            # 使用包含匹配
+            if aircraft in text:
+                print(f"   ✅ 选择飞机: {text}")
+                try:
+                    parent = ele.parent()
+                    if parent:
+                        parent.click(by_js=True)
+                    else:
+                        ele.click(by_js=True)
+                except (AttributeError, RuntimeError) as e:
+                    # 元素点击相关的特定异常
+                    print(f"   ⚠️ 点击元素失败: {type(e).__name__}")
+                    self.log(f"点击飞机选择失败: {aircraft} - {e}", "WARNING")
+                except Exception as e:
+                    # 其他未预期的异常
+                    print(f"   ⚠️ 点击失败: {type(e).__name__}: {e}")
+                    self.log(f"点击飞机选择异常: {aircraft} - {e}", "WARNING")
+                time.sleep(0.5)
+                return True
+
+        print(f"   ⚠️ 未找到飞机: {aircraft}")
+        return False
+
+    def _close_dropdown(self, page):
+        """关闭下拉框"""
         try:
             page.ele("tag:body").click()
         except (AttributeError, RuntimeError):
@@ -252,13 +293,6 @@ class LegFetcher(BaseFetcher):
             pass
 
         time.sleep(1)
-
-        if selected_count > 0:
-            print(f"   ✅ 成功选择 {selected_count} 架飞机")
-            return True
-        else:
-            print("   ❌ 未能选择任何飞机")
-            return False
 
     def extract_table_data(self, page):
         """从表格中提取航段数据"""

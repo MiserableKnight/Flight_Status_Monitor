@@ -299,135 +299,165 @@ class LegFetcher(BaseFetcher):
         print("\n📊 开始提取表格数据...")
 
         try:
-            # 找到数据容器 #dataCon
-            data_con = page.ele("tag:div@@id=dataCon")
+            # 1. 定位表格元素
+            data_con = self._locate_table(page)
             if not data_con:
-                print("   ❌ 未找到数据容器 #dataCon")
                 return None
 
-            print("   ✅ 找到数据容器")
-
-            # 找到数据行(.tr_title)
-            rows = data_con.eles("tag:div@@class=tr_title")
-            print(f"   ✅ 找到 {len(rows)} 行数据")
-
-            if not rows:
-                print("   ❌ 表格为空")
-                return None
-
-            # 表头(固定的列名)
-            headers = [
-                "日期",
-                "执飞飞机",
-                "航班号",
-                "起飞机场",
-                "着陆机场",
-                "MSN",
-                "OUT",
-                "OFF",
-                "ON",
-                "IN",
-                "运行情况",
-                "OUT油量(kg)",
-                "OFF油量(kg)",
-                "ON油量(kg)",
-                "IN油量(kg)",
-            ]
-
-            # 提取每一行的数据
-            data_rows = []
-            for i, row in enumerate(rows):
-                try:
-                    # 获取所有列 div
-                    cells = row.eles("tag:div")
-
-                    # 提取数据 - 精确定位数据单元格
-                    # HTML结构分析：
-                    # 1. 第1个div是复选框（width:30px）- 需要跳过
-                    # 2. 然后是15个数据div，每个数据div后都有一个<span></span>
-                    # 3. 数据div有 class="longtext" 或 class="showOptSpan"
-                    row_data = []
-
-                    # 方法：找到所有带 class="longtext" 或 class="showOptSpan" 的 div
-                    for cell in cells:
-                        # 检查 class 属性
-                        class_attr = cell.attr("class") or ""
-
-                        # 只保留有 longtext 或 showOptSpan 类的元素
-                        if "longtext" not in class_attr and "showOptSpan" not in class_attr:
-                            continue
-
-                        # 提取文本
-                        text = cell.text.strip()
-
-                        # 处理空值 - 保留位置
-                        if text in ["&nbsp;", "\xa0", ""]:
-                            row_data.append("")
-                        else:
-                            # 去掉末尾的 &nbsp;
-                            if text.endswith("&nbsp;"):
-                                text = text[:-6].strip()
-
-                            # 特殊处理：标准化航班号（将EU/VJ统一为VJ）
-                            # 假设当前正在处理第3列（航班号），索引为2
-                            if len(row_data) == 2:  # 已经处理了2列，当前是第3列（航班号）
-                                # 标准化航班号：统一EU和VJ为VJ
-                                text = str(text).strip().upper()
-                                # 提取数字部分
-                                import re
-
-                                match = re.search(r"\d+", text)
-                                if match:
-                                    text = f"VJ{match.group()}"
-
-                            row_data.append(text)
-
-                    # 确保始终有15列（防御性检查）
-                    if len(row_data) < 15:
-                        row_data.extend([""] * (15 - len(row_data)))
-
-                    # 只取前15列
-                    data_rows.append(row_data[:15])
-                    print(
-                        f"   📝 第{i + 1}行: {row_data[0]} - {row_data[1]} - {row_data[2]} (OUT:{row_data[6]}, OFF:{row_data[7]}, ON:{row_data[8]}, IN:{row_data[9]})"
-                    )
-
-                except (AttributeError, IndexError) as e:
-                    # 元素访问或索引错误
-                    print(f"   ⚠️ 提取第{i + 1}行数据结构异常: {type(e).__name__}")
-                    self.log(f"行数据提取异常 (行{i + 1}): {e}", "DEBUG")
-                    continue
-                except Exception as e:
-                    # 其他未预期的异常
-                    print(f"   ⚠️ 提取第{i + 1}行失败: {type(e).__name__}: {e}")
-                    self.log(f"行数据提取失败 (行{i + 1}): {e}", "WARNING")
-                    continue
-
+            # 2. 提取数据行
+            data_rows = self._extract_data_rows(data_con)
             if not data_rows:
-                print("   ❌ 未能提取到有效数据")
                 return None
 
-            # 构建CSV数据(表头 + 数据行)
-            csv_data = [headers] + data_rows
+            # 3. 组装表格数据
+            return self._assemble_table_data(data_rows)
 
-            print(f"\n   ✅ 成功提取 {len(data_rows)} 行数据")
-            return csv_data
+        except Exception as e:
+            return self._handle_extraction_error(e)
 
-        except AttributeError as e:
-            print(f"   ❌ 页面元素访问错误: {e}")
-            self.log(f"元素访问错误: {e}", "ERROR")
+    def _locate_table(self, page):
+        """定位数据容器"""
+        data_con = page.ele("tag:div@@id=dataCon")
+        if not data_con:
+            print("   ❌ 未找到数据容器 #dataCon")
             return None
-        except (TimeoutError, RuntimeError) as e:
-            print(f"   ❌ 数据提取超时或运行时错误: {e}")
-            self.log(f"数据提取失败: {e}", "ERROR")
+
+        print("   ✅ 找到数据容器")
+        return data_con
+
+    def _extract_data_rows(self, data_con):
+        """提取数据行"""
+        rows = data_con.eles("tag:div@@class=tr_title")
+        print(f"   ✅ 找到 {len(rows)} 行数据")
+
+        if not rows:
+            print("   ❌ 表格为空")
+            return None
+
+        data_rows = []
+        for i, row in enumerate(rows):
+            row_data = self._extract_single_row(row, i)
+            if row_data:
+                data_rows.append(row_data)
+
+        if not data_rows:
+            print("   ❌ 未能提取到有效数据")
+            return None
+
+        return data_rows
+
+    def _extract_single_row(self, row, row_index):
+        """提取单行数据"""
+        try:
+            cells = row.eles("tag:div")
+            row_data = []
+
+            for cell in cells:
+                cell_data = self._extract_cell_data(cell, row_data)
+                if cell_data is not None:
+                    row_data.append(cell_data)
+
+            # 确保始终有15列（防御性检查）
+            if len(row_data) < 15:
+                row_data.extend([""] * (15 - len(row_data)))
+
+            # 只取前15列
+            row_data = row_data[:15]
+            self._log_row_data(row_index, row_data)
+            return row_data
+
+        except (AttributeError, IndexError) as e:
+            print(f"   ⚠️ 提取第{row_index + 1}行数据结构异常: {type(e).__name__}")
+            self.log(f"行数据提取异常 (行{row_index + 1}): {e}", "DEBUG")
             return None
         except Exception as e:
-            print(f"   ❌ 提取数据出错: {type(e).__name__}: {e}")
-            self.log(f"数据提取失败: {type(e).__name__}: {e}", "ERROR")
+            print(f"   ⚠️ 提取第{row_index + 1}行失败: {type(e).__name__}: {e}")
+            self.log(f"行数据提取失败 (行{row_index + 1}): {e}", "WARNING")
+            return None
+
+    def _extract_cell_data(self, cell, row_data):
+        """提取单元格数据"""
+        class_attr = cell.attr("class") or ""
+
+        # 只保留有 longtext 或 showOptSpan 类的元素
+        if "longtext" not in class_attr and "showOptSpan" not in class_attr:
+            return None
+
+        text = cell.text.strip()
+
+        # 处理空值
+        if text in ["&nbsp;", "\xa0", ""]:
+            return ""
+
+        # 去掉末尾的 &nbsp;
+        if text.endswith("&nbsp;"):
+            text = text[:-6].strip()
+
+        # 特殊处理：标准化航班号（将EU/VJ统一为VJ）
+        if len(row_data) == 2:  # 当前是第3列（航班号）
+            text = self._normalize_flight_number(text)
+
+        return text
+
+    def _normalize_flight_number(self, text):
+        """标准化航班号"""
+        import re
+
+        text = str(text).strip().upper()
+        match = re.search(r"\d+", text)
+        if match:
+            return f"VJ{match.group()}"
+        return text
+
+    def _log_row_data(self, row_index, row_data):
+        """记录行数据"""
+        print(
+            f"   📝 第{row_index + 1}行: {row_data[0]} - {row_data[1]} - {row_data[2]} "
+            f"(OUT:{row_data[6]}, OFF:{row_data[7]}, ON:{row_data[8]}, IN:{row_data[9]})"
+        )
+
+    def _assemble_table_data(self, data_rows):
+        """组装完整的表格数据"""
+        headers = self._get_table_headers()
+        csv_data = [headers] + data_rows
+        print(f"\n   ✅ 成功提取 {len(data_rows)} 行数据")
+        return csv_data
+
+    def _get_table_headers(self):
+        """获取表头"""
+        return [
+            "日期",
+            "执飞飞机",
+            "航班号",
+            "起飞机场",
+            "着陆机场",
+            "MSN",
+            "OUT",
+            "OFF",
+            "ON",
+            "IN",
+            "运行情况",
+            "OUT油量(kg)",
+            "OFF油量(kg)",
+            "ON油量(kg)",
+            "IN油量(kg)",
+        ]
+
+    def _handle_extraction_error(self, error):
+        """处理提取错误"""
+        if isinstance(error, AttributeError):
+            print(f"   ❌ 页面元素访问错误: {error}")
+            self.log(f"元素访问错误: {error}", "ERROR")
+        elif isinstance(error, (TimeoutError, RuntimeError)):
+            print(f"   ❌ 数据提取超时或运行时错误: {error}")
+            self.log(f"数据提取失败: {error}", "ERROR")
+        else:
+            print(f"   ❌ 提取数据出错: {type(error).__name__}: {error}")
+            self.log(f"数据提取失败: {type(error).__name__}: {error}", "ERROR")
             import traceback
 
             traceback.print_exc()
-            return None
+        return None
 
     def navigate_to_target_page(self, page, target_date):
         """

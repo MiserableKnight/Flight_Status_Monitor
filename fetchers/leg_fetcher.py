@@ -443,6 +443,21 @@ class LegFetcher(BaseFetcher):
         :param target_date: 目标日期
         :return: 成功返回数据,失败返回 None
         """
+        # 1. 打印启动信息
+        self._print_startup_info(target_date)
+
+        # 2. 检查初始化状态
+        print("\n🔍 步骤0: 检查初始化状态")
+
+        if self.check_initialized(target_date):
+            # 已初始化，使用快速刷新模式
+            return self._run_quick_refresh_mode(page)
+
+        # 3. 执行首次初始化流程
+        return self._run_initialization_flow(page, target_date)
+
+    def _print_startup_info(self, target_date):
+        """打印启动信息"""
         print("\n" + "=" * 60)
         print("🚀 航段数据抓取器启动")
         print(f"⏰ 启动时间: {time.strftime('%H:%M:%S')}")
@@ -450,90 +465,125 @@ class LegFetcher(BaseFetcher):
         print(f"✈️ 监控飞机: {', '.join(self.aircraft_list)}")
         print("=" * 60)
 
-        # ========== 步骤0: 检查初始化状态 ==========
-        print("\n🔍 步骤0: 检查初始化状态")
+    def _run_quick_refresh_mode(self, page):
+        """运行快速刷新模式（已初始化）"""
+        print("\n✨ 检测结果: 已初始化")
+        print("⚡ 使用快速刷新模式: 只点击查询按钮")
+        print("⏱️ 预计耗时: 2-3秒")
+        print("💡 机号和日期已设置，无需重复填写")
 
-        if self.check_initialized(target_date):
-            # 已初始化，使用快速刷新模式
-            print("\n✨ 检测结果: 已初始化")
-            print("⚡ 使用快速刷新模式: 只点击查询按钮")
-            print("⏱️ 预计耗时: 2-3秒")
-            print("💡 机号和日期已设置，无需重复填写")
+        if not self.quick_refresh(page):
+            return None
 
-            if not self.quick_refresh(page):
-                return None
+        # 提取数据
+        print("\n🎯 步骤: 提取数据")
+        return self.extract_table_data(page)
 
-            # 提取数据
-            print("\n🎯 步骤: 提取数据")
-            return self.extract_table_data(page)
-
-        # ========== 页面未就绪，执行初始化流程 ==========
+    def _run_initialization_flow(self, page, target_date):
+        """运行首次初始化流程（未初始化）"""
         print("\n🔧 检测结果: 页面未就绪")
         print("🔧 执行首次初始化流程")
         print("⏱️ 预计耗时: 15-20秒")
         print("💡 只需设置一次: 机号和日期")
 
-        # ========== 步骤1: 导航到目标页面 ==========
+        # 步骤1: 导航到目标页面
+        if not self._navigate_to_leg_page(page):
+            return None
+
+        # 步骤2: 选择飞机
+        if not self._select_aircrafts_for_init(page):
+            return None
+
+        # 步骤3: 设置日期
+        self._set_date_inputs(page, target_date)
+
+        # 步骤4: 点击查询按钮
+        if not self._click_query_button(page):
+            return None
+
+        # 步骤5: 等待数据加载
+        if not self._wait_for_data_load(page):
+            return None
+
+        # 步骤6: 设置初始化标记
+        self._set_initialized_flag(target_date)
+
+        # 步骤7: 提取数据
+        print("\n🎯 步骤7: 提取数据")
+        return self.extract_table_data(page)
+
+    def _navigate_to_leg_page(self, page):
+        """导航到Leg页面"""
         print("\n🎯 步骤1: 导航到目标页面")
         target_url = "https://cis.comac.cc:8004/caphm/lineLogController/index.html"
 
         current_url = page.url
         if "lineLogController/index.html" in current_url:
             print("   ✅ 已在目标页面")
-        else:
-            print(f"   📍 当前页面: {current_url}")
-            print(f"   🎯 目标页面: {target_url}")
+            return True
 
-            # 如果从8010端口访问，先跳转到8004首页
-            if "cis.comac.cc:8004" not in current_url and "cis.comac.cc:8010" in current_url:
-                print("   🔄 从8010端口访问，先跳转到8004首页初始化...")
-                intermediate_url = "https://cis.comac.cc:8004/caphm/mainController/index.html"
-                page.get(url=intermediate_url)
+        print(f"   📍 当前页面: {current_url}")
+        print(f"   🎯 目标页面: {target_url}")
 
-                # 等待页面加载
-                print("   ⏳ 等待8004首页初始化...")
-                for i in range(8):
-                    time.sleep(1)
-                    if "mainController/index.html" in page.url:
-                        print(f"   ✅ 8004首页已就绪 ({i + 1}秒)")
-                        break
+        # 如果从8010端口访问，先跳转到8004首页
+        if "cis.comac.cc:8004" not in current_url and "cis.comac.cc:8010" in current_url:
+            if not self._navigate_via_intermediate_page(page):
+                return False
 
-                # 额外等待，确保JavaScript框架完全加载
-                print("   ⏳ 等待页面框架完全加载...")
-                time.sleep(FRAMEWORK_LOAD_WAIT_SECONDS)
+        # 跳转到目标页面
+        return self._navigate_and_verify(page, target_url)
 
-            # 跳转到目标页面
-            print("   🚀 导航到目标页面...")
-            page.get(url=target_url)
+    def _navigate_via_intermediate_page(self, page):
+        """通过中间页面导航（从8010到8004）"""
+        print("   🔄 从8010端口访问，先跳转到8004首页初始化...")
+        intermediate_url = "https://cis.comac.cc:8004/caphm/mainController/index.html"
+        page.get(url=intermediate_url)
 
-            # 验证是否到达目标页面
-            print("   🔍 验证页面...")
-            time.sleep(2)
+        # 等待页面加载
+        print("   ⏳ 等待8004首页初始化...")
+        for i in range(8):
+            time.sleep(1)
+            if "mainController/index.html" in page.url:
+                print(f"   ✅ 8004首页已就绪 ({i + 1}秒)")
+                break
 
-            max_wait = 10
-            navigated = False
-            for i in range(max_wait):
-                current_url = page.url
-                print(f"   📍 第{i + 1}次检查: {current_url}")
+        # 额外等待，确保JavaScript框架完全加载
+        print("   ⏳ 等待页面框架完全加载...")
+        time.sleep(FRAMEWORK_LOAD_WAIT_SECONDS)
+        return True
 
-                if "lineLogController/index.html" in current_url:
-                    print("   ✅ 成功到达目标页面!")
-                    print("   💡 此后将停留在此页面")
-                    navigated = True
-                    break
-                else:
-                    time.sleep(1)
+    def _navigate_and_verify(self, page, target_url):
+        """导航到目标页面并验证"""
+        print("   🚀 导航到目标页面...")
+        page.get(url=target_url)
 
-            if not navigated:
-                print("   ❌ 导航失败！")
-                return None
+        # 验证是否到达目标页面
+        print("   🔍 验证页面...")
+        time.sleep(2)
 
-        # ========== 步骤2: 选择飞机（首次运行） ==========
+        max_wait = 10
+        for i in range(max_wait):
+            current_url = page.url
+            print(f"   📍 第{i + 1}次检查: {current_url}")
+
+            if "lineLogController/index.html" in current_url:
+                print("   ✅ 成功到达目标页面!")
+                print("   💡 此后将停留在此页面")
+                return True
+            time.sleep(1)
+
+        print("   ❌ 导航失败！")
+        return False
+
+    def _select_aircrafts_for_init(self, page):
+        """初始化时选择飞机"""
         print("\n🎯 步骤2: 选择飞机（只需设置一次）")
         if not self.select_aircrafts(page, self.aircraft_list):
-            return None
+            return False
+        return True
 
-        # ========== 步骤3: 设置日期（首次运行） ==========
+    def _set_date_inputs(self, page, target_date):
+        """设置开始和结束日期输入框"""
         print("\n🎯 步骤3: 设置日期（只需设置一次）")
 
         # 设置开始时间
@@ -556,17 +606,20 @@ class LegFetcher(BaseFetcher):
         else:
             print("   ⚠️ 未找到结束时间输入框")
 
-        # ========== 步骤4: 点击查询按钮 ==========
+    def _click_query_button(self, page):
+        """点击查询按钮"""
         print("\n🎯 步骤4: 点击查询按钮")
         query_btn = page.ele("tag:input@@value=查询 @@class=button_partial2")
         if query_btn:
             query_btn.click(by_js=True)
             print("   ✅ 已点击查询按钮")
+            return True
         else:
             print("   ❌ 未找到查询按钮")
-            return None
+            return False
 
-        # ========== 步骤5: 等待数据加载 ==========
+    def _wait_for_data_load(self, page):
+        """等待数据加载完成"""
         print("\n⏳ 等待数据加载...")
         time.sleep(DATA_REFRESH_WAIT_SECONDS)
 
@@ -575,24 +628,21 @@ class LegFetcher(BaseFetcher):
             data_con = page.ele("tag:div@@id=dataCon1")
             if data_con:
                 print(f"   ✅ 数据已加载 ({i + 1}秒)")
-                break
+                return True
             print(f"   ⏳ 等待数据... ({i + 1}/10)")
             time.sleep(1)
-        else:
-            print("   ❌ 数据加载超时")
-            return None
 
-        # ========== 步骤6: 设置初始化标记 ==========
+        print("   ❌ 数据加载超时")
+        return False
+
+    def _set_initialized_flag(self, target_date):
+        """设置初始化标记"""
         print("\n🎯 步骤6: 设置初始化标记")
         self._initialized = True
         self._initialized_date = target_date
         print("   ✅ 初始化完成！")
         print(f"   📅 初始化日期: {target_date}")
         print("   💡 下次运行将直接点击查询按钮，无需重复设置机号和日期")
-
-        # ========== 步骤7: 提取数据 ==========
-        print("\n🎯 步骤7: 提取数据")
-        return self.extract_table_data(page)
 
 
 def main(target_date=None):

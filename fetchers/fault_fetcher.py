@@ -268,8 +268,32 @@ class FaultFetcher(BaseFetcher):
         """
         print("   📋 开始选择飞机...")
 
-        # 查找机号下拉框
-        # 结构：<div class="filter-option"><div class="filter-option-inner"><div class="filter-option-inner-inner"></div></div></div>
+        # 1. 查找并点击下拉框
+        if not self._find_and_click_dropdown(page):
+            return False
+
+        # 2. 等待下拉选项出现
+        time.sleep(2)
+
+        # 3. 清空所有已选项
+        self._clear_all_selections(page)
+
+        # 4. 选择目标飞机
+        selected_count = self._select_target_aircrafts(page, aircraft_list)
+
+        # 5. 关闭下拉框
+        self._close_dropdown(page)
+
+        # 6. 返回结果
+        if selected_count > 0:
+            print(f"   ✅ 成功选择 {selected_count} 架飞机")
+            return True
+        else:
+            print("   ❌ 未能选择任何飞机")
+            return False
+
+    def _find_and_click_dropdown(self, page):
+        """查找并点击机号下拉框"""
         print("   🔍 查找机号下拉框...")
 
         # 尝试找到第一个 filter-option
@@ -286,6 +310,7 @@ class FaultFetcher(BaseFetcher):
             aircraft_dropdown.click(by_js=True)
             time.sleep(1)
             print("   ✅ 已点击机号下拉框")
+            return True
         except (AttributeError, RuntimeError) as e:
             # 元素访问或点击错误
             print(f"   ❌ 点击下拉框失败: {type(e).__name__}")
@@ -296,10 +321,8 @@ class FaultFetcher(BaseFetcher):
             self.log(f"点击下拉框异常: {e}", "ERROR")
             return False
 
-        # 等待下拉选项出现
-        time.sleep(2)
-
-        # 清空所有已选项
+    def _clear_all_selections(self, page):
+        """清空所有已选择的飞机选项"""
         print("   🔍 清空所有已选项...")
         text_elements = page.eles("tag:span@@class=text")
         for ele in text_elements:
@@ -314,42 +337,48 @@ class FaultFetcher(BaseFetcher):
 
         time.sleep(1)
 
-        # 选择指定的飞机
+    def _select_target_aircrafts(self, page, aircraft_list):
+        """选择目标飞机列表"""
         print("   🎯 开始选择目标飞机...")
         selected_count = 0
 
         for aircraft in aircraft_list:
-            # 重新获取元素列表
-            text_elements = page.eles("tag:span@@class=text")
-            found = False
-            for ele in text_elements:
-                text = ele.text.strip()
-                # 使用包含匹配
-                if aircraft in text:
-                    print(f"   ✅ 选择飞机: {text}")
-                    try:
-                        parent = ele.parent()
-                        if parent:
-                            parent.click(by_js=True)
-                        else:
-                            ele.click(by_js=True)
-                    except (AttributeError, RuntimeError) as e:
-                        # 元素点击相关的特定异常
-                        print(f"   ⚠️ 点击元素失败: {type(e).__name__}")
-                        self.log(f"点击飞机选择失败: {aircraft} - {e}", "WARNING")
-                    except Exception as e:
-                        # 其他未预期的异常
-                        print(f"   ⚠️ 点击失败: {type(e).__name__}: {e}")
-                        self.log(f"点击飞机选择异常: {aircraft} - {e}", "WARNING")
-                    time.sleep(0.5)
-                    selected_count += 1
-                    found = True
-                    break
+            if self._select_single_aircraft(page, aircraft):
+                selected_count += 1
 
-            if not found:
-                print(f"   ⚠️ 未找到飞机: {aircraft}")
+        return selected_count
 
-        # 点击其他地方关闭下拉框
+    def _select_single_aircraft(self, page, aircraft):
+        """选择单架飞机"""
+        # 重新获取元素列表
+        text_elements = page.eles("tag:span@@class=text")
+        for ele in text_elements:
+            text = ele.text.strip()
+            # 使用包含匹配
+            if aircraft in text:
+                print(f"   ✅ 选择飞机: {text}")
+                try:
+                    parent = ele.parent()
+                    if parent:
+                        parent.click(by_js=True)
+                    else:
+                        ele.click(by_js=True)
+                except (AttributeError, RuntimeError) as e:
+                    # 元素点击相关的特定异常
+                    print(f"   ⚠️ 点击元素失败: {type(e).__name__}")
+                    self.log(f"点击飞机选择失败: {aircraft} - {e}", "WARNING")
+                except Exception as e:
+                    # 其他未预期的异常
+                    print(f"   ⚠️ 点击失败: {type(e).__name__}: {e}")
+                    self.log(f"点击飞机选择异常: {aircraft} - {e}", "WARNING")
+                time.sleep(0.5)
+                return True
+
+        print(f"   ⚠️ 未找到飞机: {aircraft}")
+        return False
+
+    def _close_dropdown(self, page):
+        """关闭下拉框"""
         try:
             page.ele("tag:body").click()
         except (AttributeError, RuntimeError):
@@ -357,13 +386,6 @@ class FaultFetcher(BaseFetcher):
             pass
 
         time.sleep(1)
-
-        if selected_count > 0:
-            print(f"   ✅ 成功选择 {selected_count} 架飞机")
-            return True
-        else:
-            print("   ❌ 未能选择任何飞机")
-            return False
 
     def click_history_button(self, page):
         """

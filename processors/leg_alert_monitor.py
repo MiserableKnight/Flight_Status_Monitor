@@ -38,6 +38,9 @@ class LegAlertMonitor:
     ALERT_THRESHOLD_OFF_ON = 30  # 起飞后超过计划航程时间+30分钟仍未落地
     ALERT_THRESHOLD_ON_IN = 30  # 落地后30分钟仍未滑入
 
+    # 告警重复发送间隔（秒）- 同一告警至少间隔这么多时间才能再次发送
+    ALERT_RESEND_INTERVAL = 300  # 5分钟
+
     # 数据过期阈值（秒）- 超过这个时间未更新数据认为是过期的
     DATA_STALE_THRESHOLD = 300  # 5分钟
 
@@ -92,7 +95,10 @@ class LegAlertMonitor:
         保存告警状态
 
         Args:
-            status_data: 告警状态字典
+            status_data: 告警状态字典，包含：
+                - alert_history: {alert_key: last_sent_timestamp}
+                - timestamp: 当前时间戳
+                - date: 日期
         """
         try:
             os.makedirs(os.path.dirname(self.alert_status_file), exist_ok=True)
@@ -214,7 +220,7 @@ class LegAlertMonitor:
             current_minutes: 当前时间的分钟数
 
         Returns:
-            str: 告警消息，如果无需告警返回 None
+            dict: {"key": 告警唯一标识, "message": 告警消息}，如果无需告警返回 None
         """
         out_time = row.get("OUT")
         off_time = row.get("OFF")
@@ -241,7 +247,9 @@ class LegAlertMonitor:
         if time_diff >= self.ALERT_THRESHOLD_OUT_OFF:
             aircraft = row.get("执飞飞机", "未知飞机")
             flight = row.get("航班号", "未知航班")
-            return f"{aircraft} ({flight}) 滑出30分钟仍未起飞。请确认飞机状态。"
+            alert_key = f"{aircraft}_{flight}_OUT_WITHOUT_OFF"
+            message = f"{aircraft} ({flight}) 滑出30分钟仍未起飞。请确认飞机状态。"
+            return {"key": alert_key, "message": message}
 
         return None
 
@@ -254,7 +262,7 @@ class LegAlertMonitor:
             current_minutes: 当前时间的分钟数
 
         Returns:
-            str: 告警消息，如果无需告警返回 None
+            dict: {"key": 告警唯一标识, "message": 告警消息}，如果无需告警返回 None
         """
         on_time = row.get("ON")
         in_time = row.get("IN")
@@ -281,7 +289,9 @@ class LegAlertMonitor:
         if time_diff >= self.ALERT_THRESHOLD_ON_IN:
             aircraft = row.get("执飞飞机", "未知飞机")
             flight = row.get("航班号", "未知航班")
-            return f"{aircraft} ({flight}) 落地30分钟仍未停靠。请确认飞机状态。"
+            alert_key = f"{aircraft}_{flight}_ON_WITHOUT_IN"
+            message = f"{aircraft} ({flight}) 落地30分钟仍未停靠。请确认飞机状态。"
+            return {"key": alert_key, "message": message}
 
         return None
 
@@ -296,7 +306,7 @@ class LegAlertMonitor:
             current_minutes: 当前时间的分钟数
 
         Returns:
-            str: 告警消息，如果无需告警返回 None
+            dict: {"key": 告警唯一标识, "message": 告警消息}，如果无需告警返回 None
         """
         off_time = row.get("OFF")
         on_time = row.get("ON")
@@ -332,7 +342,10 @@ class LegAlertMonitor:
         threshold = duration_minutes + self.ALERT_THRESHOLD_OFF_ON
         if time_diff >= threshold:
             aircraft = row.get("执飞飞机", "未知飞机")
-            return f"{aircraft} ({flight_number}) 起飞{time_diff}分钟（计划航程{duration_minutes}分钟）仍未落地。请确认飞机状态。"
+            # 消息中不包含动态的time_diff，避免每次检查时消息都不同
+            alert_key = f"{aircraft}_{flight_number}_OFF_WITHOUT_ON"
+            message = f"{aircraft} ({flight_number}) 起飞超过计划航程时间仍未落地。请确认飞机状态。"
+            return {"key": alert_key, "message": message}
 
         return None
 
@@ -344,7 +357,7 @@ class LegAlertMonitor:
             df: 航段数据DataFrame
 
         Returns:
-            list: 告警消息列表
+            list: 告警字典列表，每个元素包含 {"key": 唯一标识, "message": 消息}
         """
         alerts = []
         current_minutes = self.get_current_minutes()
@@ -371,21 +384,52 @@ class LegAlertMonitor:
         """
         过滤掉已发送过的告警
 
+        基于告警key和最后发送时间进行过滤：
+        - 如果告警key不在历史记录中，视为新告警
+        - 如果告警key在历史记录中，检查是否超过重发间隔
+
         Args:
-            alerts: 告警消息列表
+            alerts: 告警字典列表，每个元素包含 {"key": 唯一标识, "message": 消息}
             last_status: 上次的告警状态字典
 
         Returns:
-            list: 新的告警消息列表
+            list: 新的告警字典列表
         """
         if not last_status:
             return alerts
 
-        # 获取上次发送的告警集合
-        last_alerts_set = set(last_status.get("alerts", []))
+        # 获取当前时间
+        current_time = datetime.now()
 
-        # 过滤出新的告警
-        new_alerts = [alert for alert in alerts if alert not in last_alerts_set]
+        # 兼容旧格式：如果检测到旧格式（有"alerts"字段但没有"alert_history"字段）
+        # 则清空历史，让所有告警都作为新告警发送
+        if "alerts" in last_status and "alert_history" not in last_status:
+            print("   ℹ️ 检测到旧格式状态文件，将重置告警历史")
+            return alerts
+
+        # 获取历史告警记录 {alert_key: last_sent_timestamp}
+        alert_history = last_status.get("alert_history", {})
+
+        new_alerts = []
+        for alert in alerts:
+            alert_key = alert["key"]
+            last_sent_str = alert_history.get(alert_key)
+
+            if not last_sent_str:
+                # 这个告警从未发送过
+                new_alerts.append(alert)
+            else:
+                # 检查是否超过重发间隔
+                try:
+                    last_sent = datetime.strptime(last_sent_str, "%Y-%m-%d %H:%M:%S")
+                    time_diff = (current_time - last_sent).total_seconds()
+
+                    if time_diff >= self.ALERT_RESEND_INTERVAL:
+                        # 超过重发间隔，需要再次发送
+                        new_alerts.append(alert)
+                except (ValueError, TypeError):
+                    # 时间解析失败，视为新告警
+                    new_alerts.append(alert)
 
         return new_alerts
 
@@ -394,7 +438,7 @@ class LegAlertMonitor:
         发送告警通知
 
         Args:
-            alerts: 告警消息列表
+            alerts: 告警字典列表，每个元素包含 {"key": 唯一标识, "message": 消息}
 
         Returns:
             bool: 发送是否成功
@@ -402,14 +446,17 @@ class LegAlertMonitor:
         if not alerts:
             return True
 
+        # 提取消息部分
+        alert_messages = [alert["message"] for alert in alerts]
+
         notifier = LegAlertNotifier(config_dict=self.gmail_config)
 
         if notifier.is_enabled():
-            return notifier.send_alert_notification(alerts, self.target_date)
+            return notifier.send_alert_notification(alert_messages, self.target_date)
         else:
             print("   ⚠️ 邮件通知未启用")
             print("\n📧 告警内容：")
-            for msg in alerts:
+            for msg in alert_messages:
                 print(f"   - {msg}")
             return True  # 未启用时认为发送成功
 
@@ -483,12 +530,14 @@ class LegAlertMonitor:
         new_alerts = self.filter_new_alerts(alerts, last_status)
 
         if not new_alerts:
-            print("   ℹ️ 无新告警（均已发送过）")
-            # 更新状态为当前时间
+            print("   ℹ️ 无新告警（均已发送过或未到重发时间）")
+            # 即使没有新告警，也要更新alert_history的时间戳
+            current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            alert_history = {alert["key"]: current_time_str for alert in alerts}
             self.save_alert_status(
                 {
-                    "alerts": alerts,
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "alert_history": alert_history,
+                    "timestamp": current_time_str,
                     "date": self.target_date,
                 }
             )
@@ -503,11 +552,13 @@ class LegAlertMonitor:
         if success:
             print("   ✅ 告警通知发送成功")
 
-            # 保存当前告警状态
+            # 保存当前告警状态（包括所有告警的key和时间戳）
+            current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            alert_history = {alert["key"]: current_time_str for alert in alerts}
             self.save_alert_status(
                 {
-                    "alerts": alerts,
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "alert_history": alert_history,
+                    "timestamp": current_time_str,
                     "date": self.target_date,
                 }
             )

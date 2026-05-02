@@ -50,6 +50,5 @@ sender_email = your_email@gmail.com
 app_password = YOUR_GMAIL_APP_PASSWORD
 # 收件人邮箱（多个收件人用逗号分隔）
 recipients = recipient@example.com
-#, wangzhenlong@comac.cc
 # 发件人显示名称
 sender_name = 越捷航段监控系统

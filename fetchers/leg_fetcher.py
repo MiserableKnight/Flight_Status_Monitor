@@ -55,14 +55,18 @@ class LegFetcher(BaseFetcher):
         print("🔍 检查初始化状态")
         print("=" * 60)
 
-        if self._initialized:
+        needs_init, minutes_left = self.should_force_refresh()
+
+        if not needs_init:
             print("   ✅ 已初始化")
+            print(f"   ⏳ 下次整页刷新: {minutes_left}分钟后")
             print("   ⚡ 使用快速刷新模式")
             print("=" * 60)
             return True
-        else:
+
+        if needs_init:
             print("   ❌ 未初始化")
-            print("   → 需要执行首次初始化（设置机号和日期）")
+            print("   → 需要执行初始化（导航+选机号+设日期+查询）")
             print("=" * 60)
             return False
 
@@ -670,6 +674,7 @@ class LegFetcher(BaseFetcher):
         print("\n🎯 步骤6: 设置初始化标记")
         self._initialized = True
         self._initialized_date = target_date
+        self.mark_full_refresh()
         print("   ✅ 初始化完成！")
         print(f"   📅 初始化日期: {target_date}")
         print("   💡 下次运行将直接点击查询按钮，无需重复设置机号和日期")

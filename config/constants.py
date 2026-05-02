@@ -27,3 +27,6 @@ FRAMEWORK_LOAD_WAIT_SECONDS = 3  # 等待JavaScript框架完全加载（秒）
 
 # 重试间隔
 RETRY_INTERVAL_SECONDS = 3  # 连接/登录失败后的重试间隔（秒）
+
+# 整页刷新间隔（防止session过期导致页面卡死）
+FULL_REFRESH_INTERVAL_SECONDS = 3600  # 60分钟整页刷新一次

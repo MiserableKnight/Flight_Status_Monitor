@@ -17,7 +17,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 from config.config_loader import ConfigLoader
-from config.constants import DEFAULT_BROWSER_PORT
+from config.constants import DEFAULT_BROWSER_PORT, FULL_REFRESH_INTERVAL_SECONDS
 from core.data_saver import DataSaver
 from core.logger import get_logger
 from core.login_manager import LoginManager
@@ -62,6 +62,7 @@ class BaseFetcher(ABC):
         # 初始化状态标记（避免重复设置机号和日期）
         self._initialized = False
         self._initialized_date = None  # 记录已初始化的日期
+        self._last_full_refresh = 0  # 上次整页刷新的时间戳（用于防session过期）
         self.fetcher_name = self.__class__.__name__  # 记录fetcher类型名称
 
         # 加载配置
@@ -189,6 +190,31 @@ class BaseFetcher(ABC):
         needs_backup = subdir == "data" and filename == "leg_data.csv"
 
         return self.data_saver.save_csv(data, filename, subdir, needs_backup)
+
+    def should_force_refresh(self):
+        """
+        检查是否需要强制整页刷新（防session过期）
+
+        Returns:
+            tuple: (needs_init: bool, minutes_left: int or None)
+                needs_init: True 表示需要重新初始化
+                minutes_left: 距下次刷新的分钟数（仅未过期时有值）
+        """
+        if not self._initialized:
+            return True, None
+
+        elapsed = time.time() - self._last_full_refresh
+        if elapsed > FULL_REFRESH_INTERVAL_SECONDS:
+            print("   ⚠️ 距上次整页刷新已超过60分钟，强制重新初始化")
+            self._initialized = False
+            return True, None
+
+        minutes_left = int((FULL_REFRESH_INTERVAL_SECONDS - elapsed) / 60)
+        return False, minutes_left
+
+    def mark_full_refresh(self):
+        """标记完成一次整页刷新"""
+        self._last_full_refresh = time.time()
 
     @abstractmethod
     def get_data_prefix(self):

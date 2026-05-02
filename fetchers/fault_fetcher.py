@@ -86,14 +86,18 @@ class FaultFetcher(BaseFetcher):
         print("🔍 检查初始化状态")
         print("=" * 60)
 
-        if self._initialized:
+        needs_init, minutes_left = self.should_force_refresh()
+
+        if not needs_init:
             print("   ✅ 已初始化")
+            print(f"   ⏳ 下次整页刷新: {minutes_left}分钟后")
             print("   ⚡ 使用快速刷新模式")
             print("=" * 60)
             return True
-        else:
+
+        if needs_init:
             print("   ❌ 未初始化")
-            print("   → 需要执行首次初始化（选择机号、点击历史、设置日期）")
+            print("   → 需要执行初始化（导航+选机号+历史+设日期+查询）")
             print("=" * 60)
             return False
 
@@ -192,6 +196,7 @@ class FaultFetcher(BaseFetcher):
                 return None
             # 标记为已初始化
             self._initialized = True
+            self.mark_full_refresh()
 
         # 快速刷新：只点击查询按钮
         if not self.quick_refresh(page):

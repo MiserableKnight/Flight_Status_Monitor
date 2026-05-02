@@ -350,6 +350,16 @@ python bin/run_leg_scheduler.py                    # ❌ 错误（使用系统 P
 - **真实超时**：数据新鲜，飞机确实未落地 → 发送告警 ✓
 - **连接失败**：数据过期，浏览器断开 → 不发送误报 ✓
 
+### Q: 系统能长时间运行吗？会因 session 过期卡死吗？
+
+**A:** 能。系统具有定时整页刷新机制。
+
+- 每 60 分钟自动重新执行完整初始化流程
+- 防止 Web session 过期导致页面无响应
+- 刷新期间仍可正常监控，不影响数据抓取
+
+刷新间隔可在 `config/constants.py` 中配置（`FULL_REFRESH_INTERVAL_SECONDS`）。
+
 ### Q: 如何添加新的监控飞机？
 
 **A:** 在 `.env` 文件中修改 `AIRCRAFT_LIST`：
@@ -361,6 +371,12 @@ AIRCRAFT_LIST=B-XXXX,B-XXXX
 ---
 
 ## 📋 版本历史
+
+- **BETA4.6.5** (2026-05-02)
+  - 新增定时整页刷新机制，防止长时间运行后 session 过期
+  - 提取刷新逻辑到 BaseFetcher 基类，消除重复代码
+  - 新增 `FULL_REFRESH_INTERVAL_SECONDS` 常量统一配置刷新间隔
+  - 添加刷新机制单元测试（`test_full_refresh.py`）
 
 - **BETA4.6.4** (2026-01-31)
   - 统一文档版本号管理，与 git tag 保持一致

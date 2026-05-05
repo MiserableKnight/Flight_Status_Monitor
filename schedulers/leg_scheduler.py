@@ -160,9 +160,14 @@ class LegScheduler(BaseScheduler):
             bool: 是否成功
         """
         try:
-            # 执行抓取
+            # 获取配置的飞机列表
+            aircraft_list = self.config.get("aircraft_list", [])
             target_date = self.leg_fetcher.get_today_date()
-            data = self.leg_fetcher.navigate_to_target_page(self.leg_page, target_date)
+
+            # 执行抓取（传递飞机列表）
+            data = self.leg_fetcher.navigate_to_target_page(
+                self.leg_page, target_date, aircraft_list
+            )
 
             if data:
                 # 保存数据

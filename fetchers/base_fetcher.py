@@ -206,10 +206,14 @@ class BaseFetcher(ABC):
         elapsed = time.time() - self._last_full_refresh
         if elapsed > FULL_REFRESH_INTERVAL_SECONDS:
             print("   ⚠️ 距上次整页刷新已超过60分钟，强制重新初始化")
+            self.log(
+                f"[整页刷新] 触发强制重新初始化 (距上次刷新: {int(elapsed / 60)}分钟)", "WARNING"
+            )
             self._initialized = False
             return True, None
 
         minutes_left = int((FULL_REFRESH_INTERVAL_SECONDS - elapsed) / 60)
+        self.log(f"[整页刷新] 跳过，距下次刷新: {minutes_left}分钟", "DEBUG")
         return False, minutes_left
 
     def mark_full_refresh(self):

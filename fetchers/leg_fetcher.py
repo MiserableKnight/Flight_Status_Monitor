@@ -463,9 +463,14 @@ class LegFetcher(BaseFetcher):
             traceback.print_exc()
         return None
 
-    def navigate_to_target_page(self, page, target_date):
+    def navigate_to_target_page(self, page, target_date, aircraft_list=None):
         """
         导航到目标页面并执行抓取逻辑（优化版）
+
+        Args:
+            page: ChromiumPage 对象
+            target_date: 目标日期
+            aircraft_list: 要监控的飞机列表（可选）
 
         核心逻辑:
         1. 确保在分配的标签页上操作（标签页隔离）
@@ -475,31 +480,40 @@ class LegFetcher(BaseFetcher):
 
         :param page: ChromiumPage 对象
         :param target_date: 目标日期
+        :param aircraft_list: 要监控的飞机列表（可选）
         :return: 成功返回数据,失败返回 None
         """
         # 1. 打印启动信息
-        self._print_startup_info(target_date)
+        self._print_startup_info(target_date, aircraft_list)
 
         # 2. 检查初始化状态
         print("\n🔍 步骤0: 检查初始化状态")
 
         if self.check_initialized(target_date):
             # 已初始化，使用快速刷新模式
-            return self._run_quick_refresh_mode(page)
+            return self._run_quick_refresh_mode(page, aircraft_list)
 
         # 3. 执行首次初始化流程
-        return self._run_initialization_flow(page, target_date)
+        return self._run_initialization_flow(page, target_date, aircraft_list)
 
-    def _print_startup_info(self, target_date):
+    def _print_startup_info(self, target_date, aircraft_list=None):
         """打印启动信息"""
+        # 优先使用传入的 aircraft_list，否则使用实例变量
+        display_list = aircraft_list if aircraft_list is not None else self.aircraft_list
+
         print("\n" + "=" * 60)
         print("🚀 航段数据抓取器启动")
         print(f"⏰ 启动时间: {time.strftime('%H:%M:%S')}")
         print(f"📅 目标日期: {target_date}")
-        print(f"✈️ 监控飞机: {', '.join(self.aircraft_list)}")
+
+        if display_list:
+            print(f"✈️ 监控飞机: {', '.join(display_list)} ({len(display_list)} 架)")
+        else:
+            print("⚠️ 警告: 飞机列表为空，将显示所有机队数据！")
+
         print("=" * 60)
 
-    def _run_quick_refresh_mode(self, page):
+    def _run_quick_refresh_mode(self, page, aircraft_list=None):
         """运行快速刷新模式（已初始化）"""
         print("\n✨ 检测结果: 已初始化")
         print("⚡ 使用快速刷新模式: 只点击查询按钮")
@@ -513,19 +527,22 @@ class LegFetcher(BaseFetcher):
         print("\n🎯 步骤: 提取数据")
         return self.extract_table_data(page)
 
-    def _run_initialization_flow(self, page, target_date):
+    def _run_initialization_flow(self, page, target_date, aircraft_list=None):
         """运行首次初始化流程（未初始化）"""
         print("\n🔧 检测结果: 页面未就绪")
         print("🔧 执行首次初始化流程")
         print("⏱️ 预计耗时: 15-20秒")
         print("💡 只需设置一次: 机号和日期")
 
+        # 优先使用传入的 aircraft_list，否则使用实例变量
+        effective_list = aircraft_list if aircraft_list is not None else self.aircraft_list
+
         # 步骤1: 导航到目标页面
         if not self._navigate_to_leg_page(page):
             return None
 
         # 步骤2: 选择飞机
-        if not self._select_aircrafts_for_init(page):
+        if not self._select_aircrafts_for_init(page, effective_list):
             return None
 
         # 步骤3: 设置日期
@@ -609,11 +626,27 @@ class LegFetcher(BaseFetcher):
         print("   ❌ 导航失败！")
         return False
 
-    def _select_aircrafts_for_init(self, page):
+    def _select_aircrafts_for_init(self, page, aircraft_list):
         """初始化时选择飞机"""
         print("\n🎯 步骤2: 选择飞机（只需设置一次）")
-        if not self.select_aircrafts(page, self.aircraft_list):
-            return False
+
+        # 验证 aircraft_list
+        if aircraft_list is None:
+            aircraft_list = []
+            print("   ⚠️ 警告: aircraft_list 为 None，将使用空列表")
+        elif len(aircraft_list) == 0:
+            print("   ⚠️ 警告: aircraft_list 为空列表，不会选择任何飞机")
+            print("   ⚠️ 这可能导致显示所有机队的数据！")
+        else:
+            print(f"   📋 飞机列表: {', '.join(aircraft_list)} ({len(aircraft_list)} 架)")
+
+        if aircraft_list:
+            if not self.select_aircrafts(page, aircraft_list):
+                return False
+            print("   ✅ 机号选择完成")
+        else:
+            print("   ⏭️ 跳过机号选择（列表为空）")
+
         return True
 
     def _set_date_inputs(self, page, target_date):

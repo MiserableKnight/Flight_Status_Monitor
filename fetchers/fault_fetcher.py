@@ -235,12 +235,24 @@ class FaultFetcher(BaseFetcher):
         time.sleep(PAGE_LOAD_WAIT_SECONDS)
 
         # 步骤1：选择机号
+        # 验证 aircraft_list 是否有效
+        if aircraft_list is None:
+            aircraft_list = []
+            print("   ⚠️ 警告: aircraft_list 为 None，将使用空列表")
+        elif len(aircraft_list) == 0:
+            print("   ⚠️ 警告: aircraft_list 为空列表，不会选择任何飞机")
+            print("   ⚠️ 这可能导致显示所有机队的数据！")
+        else:
+            print(f"\n📍 步骤1: 选择机号 ({len(aircraft_list)} 架飞机)")
+            print(f"   📋 飞机列表: {', '.join(aircraft_list)}")
+
         if aircraft_list:
-            print("\n📍 步骤1: 选择机号")
             if not self.select_aircrafts(page, aircraft_list):
                 print("   ❌ 选择机号失败")
                 return False
             print("   ✅ 机号选择完成")
+        else:
+            print("   ⏭️ 跳过机号选择（列表为空）")
 
         # 步骤2：点击"历史"按钮
         print("\n📍 步骤2: 点击'历史'按钮")

@@ -60,7 +60,7 @@ cp .env.template .env
 **必需配置项：**
 
 ```bash
-# 系统登录凭证
+# .env 文件配置 - 系统登录凭证
 SYSTEM_USERNAME=your_username
 SYSTEM_PASSWORD=your_password
 
@@ -68,9 +68,14 @@ SYSTEM_PASSWORD=your_password
 GMAIL_SENDER_EMAIL=your_email@gmail.com
 GMAIL_APP_PASSWORD=your_app_password
 GMAIL_RECIPIENTS=recipient@example.com
+```
 
-# 监控的飞机号列表
-AIRCRAFT_LIST=B-XXXX,B-XXXX
+**config/config.ini 配置 - 监控飞机列表：**
+
+```ini
+[aircraft]
+# 要监控的飞机号列表（用逗号分隔）
+aircraft_list = B-652G, B-656E
 ```
 
 📖 **详细配置指南**: [docs/guides/security-setup.md](docs/guides/security-setup.md)
@@ -362,15 +367,24 @@ python bin/run_leg_scheduler.py                    # ❌ 错误（使用系统 P
 
 ### Q: 如何添加新的监控飞机？
 
-**A:** 在 `.env` 文件中修改 `AIRCRAFT_LIST`：
+**A:** 在 `config/config.ini` 文件的 `[aircraft]` 部分修改 `aircraft_list`：
 
-```bash
-AIRCRAFT_LIST=B-XXXX,B-XXXX
+```ini
+[aircraft]
+# 要监控的飞机号列表（用逗号分隔）
+aircraft_list = B-652G, B-656E, B-XXX
 ```
+
+修改后需重启监控系统使配置生效。
 
 ---
 
 ## 📋 版本历史
+
+- **BETA4.6.6** (2026-05-05)
+  - 修复 LegScheduler 不传递 aircraft_list 参数的 bug
+  - 增强飞机列表配置验证，空列表时显示明确警告
+  - 修复 README 中关于飞机配置的错误说明
 
 - **BETA4.6.5** (2026-05-02)
   - 新增定时整页刷新机制，防止长时间运行后 session 过期

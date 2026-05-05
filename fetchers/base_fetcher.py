@@ -226,13 +226,14 @@ class BaseFetcher(ABC):
         pass
 
     @abstractmethod
-    def navigate_to_target_page(self, page, target_date):
+    def navigate_to_target_page(self, page, target_date, aircraft_list=None):
         """
         导航到目标页面并执行抓取逻辑
         子类必须实现
 
         :param page: ChromiumPage 对象
         :param target_date: 目标日期
+        :param aircraft_list: 要监控的飞机列表（可选）
         :return: 成功返回数据,失败返回 None
         """
         pass

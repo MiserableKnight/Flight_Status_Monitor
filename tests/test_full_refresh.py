@@ -23,7 +23,7 @@ class _DummyFetcher(BaseFetcher):
     def get_data_prefix(self):
         return "test"
 
-    def navigate_to_target_page(self, page, target_date):
+    def navigate_to_target_page(self, page, target_date, aircraft_list=None):
         return None
 
 
@@ -35,6 +35,8 @@ def fetcher():
         inst._initialized = False
         inst._initialized_date = None
         inst._last_full_refresh = 0
+        # 提供 mock log（should_force_refresh 中有 self.log 调用）
+        inst.log = lambda msg, level="INFO": None
         return inst
 
 

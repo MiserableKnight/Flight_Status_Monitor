@@ -120,9 +120,9 @@ class LegFetcher(BaseFetcher):
             print(f"   ⏳ 等待中... ({i + 2}/8秒)")
             time.sleep(1)
 
-        print("   ⚠️ 数据刷新较慢，继续提取")
+        print("   ⚠️ 数据刷新超时，页面可能已卡住")
         print("=" * 60)
-        return True
+        return False
 
     def select_aircrafts(self, page, aircraft_list):
         """
@@ -537,8 +537,10 @@ class LegFetcher(BaseFetcher):
         # 优先使用传入的 aircraft_list，否则使用实例变量
         effective_list = aircraft_list if aircraft_list is not None else self.aircraft_list
 
-        # 步骤1: 导航到目标页面
-        if not self._navigate_to_leg_page(page):
+        # 步骤1: 导航到目标页面（整页刷新时强制重新加载）
+        # 判断是否是整页刷新：如果 _last_full_refresh > 0 说明之前初始化过，现在是重新初始化
+        is_full_refresh = self._last_full_refresh > 0
+        if not self._navigate_to_leg_page(page, force_reload=is_full_refresh):
             return None
 
         # 步骤2: 选择飞机
@@ -563,15 +565,28 @@ class LegFetcher(BaseFetcher):
         print("\n🎯 步骤7: 提取数据")
         return self.extract_table_data(page)
 
-    def _navigate_to_leg_page(self, page):
-        """导航到Leg页面"""
+    def _navigate_to_leg_page(self, page, force_reload=False):
+        """导航到Leg页面
+
+        Args:
+            page: ChromiumPage 对象
+            force_reload: 是否强制重新加载页面（整页刷新时使用）
+
+        Returns:
+            bool: 是否成功
+        """
         print("\n🎯 步骤1: 导航到目标页面")
         target_url = "https://cis.comac.cc:8004/caphm/lineLogController/index.html"
 
         current_url = page.url
-        if "lineLogController/index.html" in current_url:
+        if "lineLogController/index.html" in current_url and not force_reload:
             print("   ✅ 已在目标页面")
             return True
+
+        # 整页刷新：强制重新加载页面，确保 DOM 状态干净
+        if force_reload and "lineLogController/index.html" in current_url:
+            print("   🔄 整页刷新: 强制重新加载页面...")
+            self.log("[整页刷新] 强制重新加载 Leg 页面", "INFO")
 
         print(f"   📍 当前页面: {current_url}")
         print(f"   🎯 目标页面: {target_url}")

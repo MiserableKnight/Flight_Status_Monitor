@@ -190,7 +190,30 @@ class FaultFetcher(BaseFetcher):
 
         # 检查是否需要初始化
         if not self.check_initialized():
-            # 首次初始化：选择机号、点击历史、设置日期
+            # 整页刷新：强制重新加载页面，确保 DOM 状态干净
+            # （页面空闲60分钟后，DOM 可能漂移导致下拉框操作失败）
+            if "integratedMonitorController/list.html" in page.url:
+                print("   🔄 整页刷新: 强制重新加载页面...")
+                self.log("[整页刷新] 强制重新加载页面", "INFO")
+                try:
+                    page.get(target_url)
+                    # 等待页面关键元素加载
+                    for i in range(10):
+                        current_url_after_reload = page.url
+                        if "integratedMonitorController" in current_url_after_reload:
+                            dropdown = page.ele("tag:div@@class=filter-option")
+                            if dropdown:
+                                print(f"   ✅ 页面重新加载完成 (耗时: {i + 1}秒)")
+                                break
+                        print(f"   ⏳ 重新加载中... ({i + 1}/10秒)")
+                        time.sleep(1)
+                    else:
+                        print("   ⚠️ 页面重新加载超时，尝试继续初始化")
+                except Exception as e:
+                    print(f"   ⚠️ 页面重新加载失败: {e}，尝试继续初始化")
+                    self.log(f"[整页刷新] 页面重新加载失败: {e}", "WARNING")
+
+            # 初始化：选择机号、点击历史、设置日期
             if not self.initialize_page(page, aircraft_list, target_date):
                 print("❌ 页面初始化失败")
                 return None
@@ -590,9 +613,9 @@ class FaultFetcher(BaseFetcher):
             print(f"   ⏳ 等待中... ({i + 3}/10秒)")
             time.sleep(1)
 
-        print("   ⚠️ 数据刷新较慢，继续提取")
+        print("   ⚠️ 数据刷新超时，页面可能已卡住")
         print("=" * 60)
-        return True
+        return False
 
     def extract_fault_data(self, page):
         """

@@ -23,6 +23,8 @@ from config.constants import RETRY_INTERVAL_SECONDS
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
+from DrissionPage.errors import PageDisconnectedError
+
 from config.config_loader import load_config
 from core.logger import get_logger
 from exceptions.auth import LoginFailedError, SessionExpiredError
@@ -166,8 +168,8 @@ class BaseScheduler(ABC):
             # 尝试获取页面URL（轻量级检测）
             _ = page.url
             return True
-        except (AttributeError, ConnectionError, OSError) as e:
-            # 具体捕获页面连接相关的异常
+        except (AttributeError, ConnectionError, OSError, PageDisconnectedError) as e:
+            # 具体捕获页面连接相关的异常（含 DrissionPage 页面断连）
             self.log(f"页面连接检测失败: {type(e).__name__}", "DEBUG")
             return False
 

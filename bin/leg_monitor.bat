@@ -61,4 +61,4 @@ if %ERRORLEVEL% EQU 0 (
 )
 
 echo.
-pause
+timeout /t 5
